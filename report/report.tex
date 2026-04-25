@@ -1,0 +1,109 @@
+\documentclass[11pt]{ctexart}
+
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Project 1 Report Notes}
+\author{姓名：于翔 \quad 学号：23307130202}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{MLP Baseline}
+
+本节记录 Part A 的实现与实验结果。按照项目要求，本部分只完成 MLP baseline，不引入 CNN、momentum、learning rate scheduler、L2 regularization、dropout 等后续比较项，避免基线设置与 Part B/Part C 混淆。
+
+\subsection{Implementation}
+
+本部分主要修改了以下文件：
+
+\begin{itemize}
+    \item \texttt{codes/mynn/op.py}: 实现 \texttt{Linear.forward}、\texttt{Linear.backward} 和 \texttt{MultiCrossEntropyLoss}。
+    \item \texttt{codes/mynn/models.py}: 修正 \texttt{Model\_MLP} 的初始化与模型加载逻辑。
+    \item \texttt{codes/mynn/optimizer.py}: 修正 \texttt{SGD.step}，使用原地参数更新，确保 \texttt{Linear.forward} 中实际使用的 \texttt{W} 和 \texttt{b} 被更新。
+    \item \texttt{codes/mynn/runner.py}: 修正训练循环中的空 batch 问题，并将验证改为按固定间隔执行。
+    \item \texttt{codes/test\_train.py}: 设置并运行 MLP baseline 训练流程。
+    \item \texttt{codes/test\_model.py}: 加载保存的 baseline 模型并在测试集上评估。
+\end{itemize}
+
+线性层前向传播为
+\[
+    Y = XW + b.
+\]
+反向传播中，设下一层传回梯度为 \(\frac{\partial L}{\partial Y}\)，则
+\[
+    \frac{\partial L}{\partial W} = X^\top \frac{\partial L}{\partial Y},
+    \quad
+    \frac{\partial L}{\partial b} = \sum_i \frac{\partial L}{\partial Y_i},
+    \quad
+    \frac{\partial L}{\partial X} = \frac{\partial L}{\partial Y} W^\top.
+\]
+
+分类损失采用 softmax cross entropy。实现中先对 logits 做数值稳定的 softmax，再计算平均交叉熵损失。反向传播使用 softmax 与 cross entropy 合并后的梯度：
+\[
+    \frac{\partial L}{\partial z} = \frac{p - y}{N},
+\]
+其中 \(p\) 为 softmax 概率，\(y\) 为 one-hot 标签，\(N\) 为 batch size。
+
+\subsection{Training Setting}
+
+MNIST 训练集共 60000 张图像。实验中固定随机种子为 309，将其中 10000 张作为 validation set，其余 50000 张作为 training set。输入图像展平为 784 维向量，并归一化到 \([0, 1]\)。
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+Item & Setting \\
+\midrule
+Model & MLP \\
+Architecture & \(784 \rightarrow 256 \rightarrow 10\) \\
+Activation & ReLU \\
+Loss & Softmax cross entropy \\
+Optimizer & SGD \\
+Learning rate & 0.1 \\
+Batch size & 128 \\
+Epochs & 5 \\
+Validation size & 10000 \\
+\bottomrule
+\end{tabular}
+\caption{Part A MLP baseline setting.}
+\end{table}
+
+\subsection{Results}
+
+训练完成后，保存的最佳模型位于
+\texttt{codes/best\_models/best\_model.pickle}。学习曲线保存于
+\texttt{codes/figs/part\_a\_mlp\_learning\_curve.png}。
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lc}
+\toprule
+Metric & Accuracy \\
+\midrule
+Best validation accuracy & 0.95240 \\
+Test accuracy & 0.95590 \\
+\bottomrule
+\end{tabular}
+\caption{Part A MLP baseline results.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{../codes/figs/part_a_mlp_learning_curve.png}
+\caption{Learning curve of the MLP baseline.}
+\end{figure}
+
+\subsection{Current Verification}
+
+已完成以下检查：
+\begin{itemize}
+    \item \texttt{python3 -m py\_compile} 检查通过。
+    \item \texttt{python3 test\_train.py} 可完成训练并保存模型与学习曲线。
+    \item \texttt{python3 test\_model.py} 可加载保存模型并输出测试准确率 0.9559。
+\end{itemize}
+
+\end{document}

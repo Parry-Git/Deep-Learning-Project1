@@ -18,6 +18,7 @@ codes/dataset/
 # Trained model weights / checkpoints.
 codes/saved_models/
 codes/best_models/
+codes/figs/
 *.ckpt
 *.pt
 *.pth
