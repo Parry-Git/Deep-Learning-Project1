@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Dataset files: the project PDF says not to upload datasets to GitHub.
+codes/dataset/
+
+# Trained model weights / checkpoints.
+codes/saved_models/
+codes/best_models/
+*.ckpt
+*.pt
+*.pth
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.onnx
+*.h5
+*.hdf5
+
+# Large packaged artifacts.
+*.zip
+*.tar
+*.tar.gz
+*.tgz
