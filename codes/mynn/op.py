@@ -190,6 +190,43 @@ class Flatten(Layer):
         assert self.input_shape is not None
         return grads.reshape(self.input_shape)
 
+class MaxPool2D(Layer):
+    """
+    Non-overlapping 2D max pooling for image-like tensors.
+    """
+    def __init__(self, pool_size=2) -> None:
+        super().__init__()
+        self.pool_size = pool_size
+        self.input_shape = None
+        self.max_mask = None
+        self.optimizable = False
+
+    def __call__(self, X):
+        return self.forward(X)
+
+    def forward(self, X):
+        assert X.ndim == 4
+        N, C, H, W = X.shape
+        assert H % self.pool_size == 0 and W % self.pool_size == 0
+
+        self.input_shape = X.shape
+        out_H = H // self.pool_size
+        out_W = W // self.pool_size
+        windows = X.reshape(N, C, out_H, self.pool_size, out_W, self.pool_size)
+        pooled = np.max(windows, axis=(3, 5))
+        self.max_mask = windows == pooled[:, :, :, None, :, None]
+        return pooled
+
+    def backward(self, grads):
+        assert self.input_shape is not None and self.max_mask is not None
+        N, C, H, W = self.input_shape
+        out_H = H // self.pool_size
+        out_W = W // self.pool_size
+        grad_windows = np.zeros((N, C, out_H, self.pool_size, out_W, self.pool_size))
+        max_count = np.sum(self.max_mask, axis=(3, 5), keepdims=True)
+        grad_windows += self.max_mask * grads[:, :, :, None, :, None] / max_count
+        return grad_windows.reshape(self.input_shape)
+
 class MultiCrossEntropyLoss(Layer):
     """
     A multi-cross-entropy loss layer, with Softmax layer in it, which could be cancelled by method cancel_softmax

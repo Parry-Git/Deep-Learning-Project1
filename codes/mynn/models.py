@@ -85,21 +85,36 @@ class Model_CNN(Layer):
     """
     A model with conv2D layers. Implement it using the operators you have written in op.py
     """
-    def __init__(self, in_channels=1, input_size=28, conv_channels=8, kernel_size=3, num_classes=10):
+    def __init__(
+        self,
+        in_channels=1,
+        input_size=28,
+        conv_channels=4,
+        second_conv_channels=8,
+        kernel_size=3,
+        pool_size=2,
+        num_classes=10,
+    ):
         super().__init__()
         self.in_channels = in_channels
         self.input_size = input_size
         self.conv_channels = conv_channels
+        self.second_conv_channels = second_conv_channels
         self.kernel_size = kernel_size
+        self.pool_size = pool_size
         self.num_classes = num_classes
         self.padding = kernel_size // 2
         self.stride = 1
 
         conv_scale = np.sqrt(2.0 / (in_channels * kernel_size * kernel_size))
-        linear_in = conv_channels * input_size * input_size
+        final_channels = second_conv_channels or conv_channels
+        final_size = input_size // pool_size if second_conv_channels is not None else input_size
+        second_conv_scale = np.sqrt(2.0 / (conv_channels * kernel_size * kernel_size))
+        linear_in = final_channels * final_size * final_size
         linear_scale = np.sqrt(1.0 / linear_in)
 
         conv_init = lambda size, scale=conv_scale: np.random.normal(0.0, scale, size)
+        second_conv_init = lambda size, scale=second_conv_scale: np.random.normal(0.0, scale, size)
         linear_init = lambda size, scale=linear_scale: np.random.normal(0.0, scale, size)
 
         self.layers = [
@@ -112,9 +127,24 @@ class Model_CNN(Layer):
                 initialize_method=conv_init,
             ),
             ReLU(),
+        ]
+        if second_conv_channels is not None:
+            self.layers.extend([
+                MaxPool2D(pool_size=pool_size),
+                conv2D(
+                    in_channels=conv_channels,
+                    out_channels=second_conv_channels,
+                    kernel_size=kernel_size,
+                    stride=self.stride,
+                    padding=self.padding,
+                    initialize_method=second_conv_init,
+                ),
+                ReLU(),
+            ])
+        self.layers.extend([
             Flatten(),
             Linear(linear_in, num_classes, initialize_method=linear_init),
-        ]
+        ])
 
     def __call__(self, X):
         return self.forward(X)
@@ -140,6 +170,14 @@ class Model_CNN(Layer):
             param_list = pickle.load(f)
 
         config = param_list['config']
+        if 'second_conv_channels' not in config and len(param_list['params']) == 2:
+            config['second_conv_channels'] = None
+        if 'pool_size' not in config:
+            config['pool_size'] = 1 if (
+                config.get('second_conv_channels') is not None
+                and len(param_list['params']) == 3
+                and param_list['params'][-1]['W'].shape[0] == config['second_conv_channels'] * config['input_size'] * config['input_size']
+            ) else 2
         self.__init__(**config)
 
         param_idx = 0
@@ -160,7 +198,9 @@ class Model_CNN(Layer):
                 'in_channels': self.in_channels,
                 'input_size': self.input_size,
                 'conv_channels': self.conv_channels,
+                'second_conv_channels': self.second_conv_channels,
                 'kernel_size': self.kernel_size,
+                'pool_size': self.pool_size,
                 'num_classes': self.num_classes,
             },
             'params': [],

@@ -56,7 +56,7 @@ def split_train_valid(images, labels, valid_size, seed, idx_path):
 
 def build_model(model_name, args, input_dim, max_classes):
     if model_name == 'mlp':
-        model = nn.models.Model_MLP([input_dim, args.hidden_size, max_classes], 'ReLU')
+        model = nn.models.Model_MLP([input_dim, args.hidden_size, args.hidden_size_2, max_classes], 'ReLU')
         lr = args.lr if args.lr is not None else 0.1
         save_dir = args.save_dir or BASE_DIR / 'best_models' / 'mlp'
         fig_name = args.figure or 'part_a_mlp_learning_curve.png'
@@ -66,7 +66,9 @@ def build_model(model_name, args, input_dim, max_classes):
             in_channels=1,
             input_size=28,
             conv_channels=args.conv_channels,
+            second_conv_channels=args.second_conv_channels,
             kernel_size=args.kernel_size,
+            pool_size=args.pool_size,
             num_classes=max_classes,
         )
         lr = args.lr if args.lr is not None else 0.05
@@ -93,9 +95,12 @@ def parse_args():
     parser.add_argument('--save-dir', type=Path, default=None)
     parser.add_argument('--figure', type=str, default=None)
 
-    parser.add_argument('--hidden-size', type=int, default=256)
-    parser.add_argument('--conv-channels', type=int, default=8)
+    parser.add_argument('--hidden-size', type=int, default=32)
+    parser.add_argument('--hidden-size-2', type=int, default=16)
+    parser.add_argument('--conv-channels', type=int, default=4)
+    parser.add_argument('--second-conv-channels', type=int, default=8)
     parser.add_argument('--kernel-size', type=int, default=3)
+    parser.add_argument('--pool-size', type=int, default=2)
     return parser.parse_args()
 
 
@@ -143,14 +148,14 @@ def main():
         save_dir=save_dir,
     )
 
-    _, axes = plt.subplots(1, 2)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     axes.reshape(-1)
-    _.set_tight_layout(1)
     plot(runner, axes)
+    fig.tight_layout(w_pad=3.0)
 
     fig_dir = BASE_DIR / 'figs'
     os.makedirs(fig_dir, exist_ok=True)
-    plt.savefig(fig_dir / fig_name, dpi=200)
+    fig.savefig(fig_dir / fig_name, dpi=200, bbox_inches='tight')
     print(f"Model: {args.model}")
     print(f"Learning rate: {lr}")
     print(f"Best validation accuracy: {runner.best_score:.5f}")

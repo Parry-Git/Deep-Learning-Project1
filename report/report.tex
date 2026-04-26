@@ -22,8 +22,8 @@
 本部分主要修改了以下文件：
 
 \begin{itemize}
-    \item \texttt{codes/mynn/op.py}: 实现 \texttt{Linear.forward}、\texttt{Linear.backward} 和 \texttt{MultiCrossEntropyLoss}。
-    \item \texttt{codes/mynn/models.py}: 修正 \texttt{Model\_MLP} 的初始化与模型加载逻辑。
+    \item \texttt{codes/mynn/op.py}: 实现线性层前向、反向传播和 softmax cross entropy 损失。
+    \item \texttt{codes/mynn/models.py}: 修正 \texttt{Model\_MLP} 的初始化与模型加载逻辑，并使用两层隐藏层以便和后续小型 CNN 的模型规模更接近。
     \item \texttt{codes/mynn/optimizer.py}: 修正 \texttt{SGD.step}，使用原地参数更新，确保 \texttt{Linear.forward} 中实际使用的 \texttt{W} 和 \texttt{b} 被更新。
     \item \texttt{codes/mynn/runner.py}: 修正训练循环中的空 batch 问题，并将验证改为按固定间隔执行。
     \item \texttt{codes/test\_train.py}: 设置并运行 MLP baseline 训练流程。
@@ -60,7 +60,7 @@ MNIST 训练集共 60000 张图像。实验中固定随机种子为 309，将其
 Item & Setting \\
 \midrule
 Model & MLP \\
-Architecture & \(784 \rightarrow 256 \rightarrow 10\) \\
+Architecture & \(784 \rightarrow 32 \rightarrow 16 \rightarrow 10\) \\
 Activation & ReLU \\
 Loss & Softmax cross entropy \\
 Optimizer & SGD \\
@@ -85,8 +85,8 @@ Validation size & 10000 \\
 \toprule
 Metric & Accuracy \\
 \midrule
-Best validation accuracy & 0.95240 \\
-Test accuracy & 0.95590 \\
+Best validation accuracy & 0.94790 \\
+Test accuracy & 0.95440 \\
 \bottomrule
 \end{tabular}
 \caption{Part A MLP baseline results.}
@@ -107,7 +107,7 @@ Test accuracy & 0.95590 \\
 本部分主要修改或新增了以下文件：
 
 \begin{itemize}
-    \item \texttt{codes/mynn/op.py}: 实现 \texttt{conv2D.forward} 和 \texttt{conv2D.backward}，并新增 \texttt{Flatten} 层。
+    \item \texttt{codes/mynn/op.py}: 实现 \texttt{conv2D.forward} 和 \texttt{conv2D.backward}，并新增 \texttt{Flatten} 与 \texttt{MaxPool2D} 层。
     \item \texttt{codes/mynn/models.py}: 实现 \texttt{Model\_CNN}，包括前向传播、反向传播、模型保存与加载。
     \item \texttt{codes/mynn/runner.py}: 支持按 batch 分批验证，避免 CNN 在验证集上一次性缓存过大的 feature map。
     \item \texttt{codes/test\_train.py}: 通过参数 \texttt{--model cnn} 训练 CNN 模型并保存学习曲线。
@@ -118,16 +118,19 @@ Test accuracy & 0.95590 \\
 
 \subsection{CNN Training Setting}
 
-CNN 采用一个较小的结构，便于在 CPU 上完整训练和复现实验：
+CNN 采用一个较小的两层卷积结构，便于在 CPU 上完整训练、复现实验，并为后续卷积特征可视化保留更丰富的中间表示：
 
-\[
-    \text{Conv}(1 \rightarrow 8, 3 \times 3, \text{padding}=1)
+\begin{align*}
+    &\text{Conv}(1 \rightarrow 4, 3 \times 3, \text{padding}=1)
+    \rightarrow \text{ReLU}
+    \rightarrow \text{MaxPool}(2 \times 2) \\
+    &\rightarrow \text{Conv}(4 \rightarrow 8, 3 \times 3, \text{padding}=1)
     \rightarrow \text{ReLU}
     \rightarrow \text{Flatten}
-    \rightarrow \text{Linear}(8 \times 28 \times 28 \rightarrow 10).
-\]
+    \rightarrow \text{Linear}(8 \times 14 \times 14 \rightarrow 10).
+\end{align*}
 
-训练集、验证集划分、随机种子、batch size 和 epoch 数均与 MLP baseline 保持一致。CNN 使用固定学习率 SGD，不使用 momentum、learning rate scheduler 或额外正则化。
+训练集、验证集划分、随机种子、batch size 和 epoch 数均与 MLP baseline 保持一致。CNN 使用固定学习率 SGD，不使用 momentum、learning rate scheduler 或额外正则化。第一层卷积后加入 \(2 \times 2\) max pooling，使第二层卷积在 \(14 \times 14\) 特征图上运行；这样仍然保留两层卷积结构，同时降低手写 NumPy 卷积的训练成本。
 
 \begin{table}[h]
 \centering
@@ -136,10 +139,11 @@ CNN 采用一个较小的结构，便于在 CPU 上完整训练和复现实验�
 Item & Setting \\
 \midrule
 Model & CNN \\
-Architecture & Conv-ReLU-Flatten-Linear \\
-Conv channels & 8 \\
+Architecture & Conv-ReLU-Pool-Conv-ReLU-Flatten-Linear \\
+Conv channels & \(4, 8\) \\
 Kernel size & \(3 \times 3\) \\
 Padding & 1 \\
+Pooling & \(2 \times 2\) max pooling \\
 Loss & Softmax cross entropy \\
 Optimizer & SGD \\
 Learning rate & 0.05 \\
@@ -163,8 +167,8 @@ CNN 训练完成后，保存的最佳模型位于
 \toprule
 Model & Best validation accuracy & Test accuracy \\
 \midrule
-MLP baseline & 0.95240 & 0.95590 \\
-CNN & 0.95960 & 0.96130 \\
+MLP baseline & 0.94790 & 0.95440 \\
+CNN & 0.97570 & 0.97790 \\
 \bottomrule
 \end{tabular}
 \caption{MLP-vs-CNN comparison under similar training settings.}
@@ -178,19 +182,19 @@ CNN & 0.95960 & 0.96130 \\
 
 \subsection{Discussion}
 
-在当前设置下，CNN 的 validation accuracy 和 test accuracy 都略高于 MLP baseline。主要原因是 CNN 的卷积核共享参数，并利用了图像中的局部空间结构；相比直接把 \(28 \times 28\) 图像展平成向量的 MLP，CNN 更容易学习局部笔画、边缘和小形状等与手写数字相关的模式。
+在当前设置下，CNN 的 validation accuracy 和 test accuracy 都高于 MLP baseline。主要原因是 CNN 的卷积核共享参数，并利用了图像中的局部空间结构；相比直接把 \(28 \times 28\) 图像展平成向量的 MLP，CNN 更容易学习局部笔画、边缘和小形状等与手写数字相关的模式。
 
-本实验中的 CNN 仍然很简单，只包含一个卷积层，没有使用 pooling、dropout、batch normalization 或更深的卷积结构。因此它的提升幅度有限，但已经体现出卷积模型相对 MLP 更适合图像分类任务的趋势。
+本实验中的 CNN 仍然很简单，只包含两层小宽度卷积和一个 max pooling 层，没有使用 dropout、batch normalization 或复杂残差结构。相较于单卷积层版本，两层卷积提供了更适合后续分析和可视化的中间特征；相较于更宽的 \(8 \rightarrow 16\) 版本，\(4 \rightarrow 8\) 的通道设置更适合当前手写 NumPy 实现的运行成本。
 
 \subsection{Current Verification}
 
 已完成以下检查：
 \begin{itemize}
     \item \texttt{python3 -m py\_compile} 检查通过。
-    \item \texttt{python3 test\_train.py --model mlp} 可完成 MLP 训练并保存模型与学习曲线。
-    \item \texttt{python3 test\_model.py --model mlp} 可加载保存模型并输出测试准确率 0.9559。
-    \item \texttt{python3 test\_train.py --model cnn} 可完成 CNN 训练并保存模型与学习曲线。
-    \item \texttt{python3 test\_model.py --model cnn} 可加载保存 CNN 模型并输出测试准确率 0.9613。
+    \item \texttt{python3 test\_train.py --model mlp} 可完成 MLP 训练并保存模型与更宽的学习曲线图。
+    \item \texttt{python3 test\_model.py --model mlp} 可加载保存模型并输出测试准确率 0.9544。
+    \item \texttt{python3 test\_train.py --model cnn} 可完成两层 CNN 训练并保存模型与更宽的学习曲线图。
+    \item \texttt{python3 test\_model.py --model cnn} 可加载保存 CNN 模型并输出测试准确率 0.9779。
     \item 对 \texttt{conv2D.backward} 做了小规模数值梯度检查，卷积核梯度相对误差约为 \(1.19 \times 10^{-13}\)。
 \end{itemize}
 
