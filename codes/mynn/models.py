@@ -85,20 +85,94 @@ class Model_CNN(Layer):
     """
     A model with conv2D layers. Implement it using the operators you have written in op.py
     """
-    def __init__(self):
-        pass
+    def __init__(self, in_channels=1, input_size=28, conv_channels=8, kernel_size=3, num_classes=10):
+        super().__init__()
+        self.in_channels = in_channels
+        self.input_size = input_size
+        self.conv_channels = conv_channels
+        self.kernel_size = kernel_size
+        self.num_classes = num_classes
+        self.padding = kernel_size // 2
+        self.stride = 1
+
+        conv_scale = np.sqrt(2.0 / (in_channels * kernel_size * kernel_size))
+        linear_in = conv_channels * input_size * input_size
+        linear_scale = np.sqrt(1.0 / linear_in)
+
+        conv_init = lambda size, scale=conv_scale: np.random.normal(0.0, scale, size)
+        linear_init = lambda size, scale=linear_scale: np.random.normal(0.0, scale, size)
+
+        self.layers = [
+            conv2D(
+                in_channels=in_channels,
+                out_channels=conv_channels,
+                kernel_size=kernel_size,
+                stride=self.stride,
+                padding=self.padding,
+                initialize_method=conv_init,
+            ),
+            ReLU(),
+            Flatten(),
+            Linear(linear_in, num_classes, initialize_method=linear_init),
+        ]
 
     def __call__(self, X):
         return self.forward(X)
 
     def forward(self, X):
-        pass
+        if X.ndim == 2:
+            expected_dim = self.in_channels * self.input_size * self.input_size
+            assert X.shape[1] == expected_dim
+            X = X.reshape(X.shape[0], self.in_channels, self.input_size, self.input_size)
+        outputs = X
+        for layer in self.layers:
+            outputs = layer(outputs)
+        return outputs
 
     def backward(self, loss_grad):
-        pass
+        grads = loss_grad
+        for layer in reversed(self.layers):
+            grads = layer.backward(grads)
+        return grads
     
     def load_model(self, param_list):
-        pass
+        with open(param_list, 'rb') as f:
+            param_list = pickle.load(f)
+
+        config = param_list['config']
+        self.__init__(**config)
+
+        param_idx = 0
+        for layer in self.layers:
+            if layer.optimizable:
+                params = param_list['params'][param_idx]
+                layer.W = params['W']
+                layer.b = params['b']
+                layer.params['W'] = layer.W
+                layer.params['b'] = layer.b
+                layer.weight_decay = params['weight_decay']
+                layer.weight_decay_lambda = params['lambda']
+                param_idx += 1
         
     def save_model(self, save_path):
-        pass
+        param_list = {
+            'config': {
+                'in_channels': self.in_channels,
+                'input_size': self.input_size,
+                'conv_channels': self.conv_channels,
+                'kernel_size': self.kernel_size,
+                'num_classes': self.num_classes,
+            },
+            'params': [],
+        }
+        for layer in self.layers:
+            if layer.optimizable:
+                param_list['params'].append({
+                    'W' : layer.params['W'],
+                    'b' : layer.params['b'],
+                    'weight_decay' : layer.weight_decay,
+                    'lambda' : layer.weight_decay_lambda,
+                })
+
+        with open(save_path, 'wb') as f:
+            pickle.dump(param_list, f)

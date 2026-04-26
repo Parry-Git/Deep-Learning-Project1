@@ -63,7 +63,24 @@ class conv2D(Layer):
     The 2D convolutional layer. Try to implement it on your own.
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, initialize_method=np.random.normal, weight_decay=False, weight_decay_lambda=1e-8) -> None:
-        pass
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+
+        self.W = initialize_method(size=(out_channels, in_channels, kernel_size, kernel_size))
+        self.b = np.zeros((1, out_channels, 1, 1))
+        self.params = {'W' : self.W, 'b' : self.b}
+        self.grads = {'W' : None, 'b' : None}
+
+        self.input_shape = None
+        self.input_padded = None
+        self.windows = None
+
+        self.weight_decay = weight_decay
+        self.weight_decay_lambda = weight_decay_lambda
 
     def __call__(self, X) -> np.ndarray:
         return self.forward(X)
@@ -74,13 +91,58 @@ class conv2D(Layer):
         W : [1, out, in, k, k]
         no padding
         """
-        pass
+        assert X.ndim == 4
+        assert X.shape[1] == self.in_channels
+
+        self.input_shape = X.shape
+        if self.padding > 0:
+            X_padded = np.pad(
+                X,
+                ((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)),
+                mode='constant'
+            )
+        else:
+            X_padded = X
+        self.input_padded = X_padded
+
+        k = self.kernel_size
+        windows = np.lib.stride_tricks.sliding_window_view(X_padded, (k, k), axis=(2, 3))
+        windows = windows[:, :, ::self.stride, ::self.stride, :, :]
+        self.windows = windows
+
+        out = np.einsum('nchwkl,ockl->nohw', windows, self.W)
+        return out + self.b
 
     def backward(self, grads):
         """
         grads : [batch_size, out_channel, new_H, new_W]
         """
-        pass
+        assert self.windows is not None and self.input_shape is not None
+        assert grads.shape[1] == self.out_channels
+
+        self.grads['W'] = np.einsum('nohw,nchwkl->ockl', grads, self.windows)
+        self.grads['b'] = np.sum(grads, axis=(0, 2, 3), keepdims=True)
+
+        grad_input_padded = np.zeros_like(self.input_padded)
+        out_H, out_W = grads.shape[2], grads.shape[3]
+        for i in range(self.kernel_size):
+            for j in range(self.kernel_size):
+                grad_window = np.einsum('nohw,oc->nchw', grads, self.W[:, :, i, j])
+                grad_input_padded[
+                    :,
+                    :,
+                    i:i + self.stride * out_H:self.stride,
+                    j:j + self.stride * out_W:self.stride,
+                ] += grad_window
+
+        if self.padding > 0:
+            return grad_input_padded[
+                :,
+                :,
+                self.padding:-self.padding,
+                self.padding:-self.padding,
+            ]
+        return grad_input_padded
     
     def clear_grad(self):
         self.grads = {'W' : None, 'b' : None}
@@ -107,6 +169,26 @@ class ReLU(Layer):
         assert self.input.shape == grads.shape
         output = np.where(self.input < 0, 0, grads)
         return output
+
+class Flatten(Layer):
+    """
+    Flatten image-like tensors into [batch_size, features].
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.input_shape = None
+        self.optimizable = False
+
+    def __call__(self, X):
+        return self.forward(X)
+
+    def forward(self, X):
+        self.input_shape = X.shape
+        return X.reshape(X.shape[0], -1)
+
+    def backward(self, grads):
+        assert self.input_shape is not None
+        return grads.reshape(self.input_shape)
 
 class MultiCrossEntropyLoss(Layer):
     """

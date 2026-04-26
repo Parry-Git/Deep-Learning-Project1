@@ -14,6 +14,7 @@ class RunnerM():
         self.metric = metric
         self.scheduler = scheduler
         self.batch_size = batch_size
+        self.eval_batch_size = None
 
         self.train_scores = []
         self.dev_scores = []
@@ -25,6 +26,7 @@ class RunnerM():
         num_epochs = kwargs.get("num_epochs", 0)
         log_iters = kwargs.get("log_iters", 100)
         eval_iters = kwargs.get("eval_iters", log_iters)
+        self.eval_batch_size = kwargs.get("eval_batch_size", self.eval_batch_size)
         save_dir = kwargs.get("save_dir", "best_model")
 
         if not os.path.exists(save_dir):
@@ -91,6 +93,23 @@ class RunnerM():
 
     def evaluate(self, data_set):
         X, y = data_set
+        if self.eval_batch_size is not None and X.shape[0] > self.eval_batch_size:
+            total_loss = 0.0
+            total_score = 0.0
+            total_num = 0
+            for start in range(0, X.shape[0], self.eval_batch_size):
+                end = min(start + self.eval_batch_size, X.shape[0])
+                batch_X = X[start:end]
+                batch_y = y[start:end]
+                logits = self.model(batch_X)
+                batch_loss = self.loss_fn(logits, batch_y)
+                batch_score = self.metric(logits, batch_y)
+                batch_num = end - start
+                total_loss += batch_loss * batch_num
+                total_score += batch_score * batch_num
+                total_num += batch_num
+            return total_score / total_num, total_loss / total_num
+
         logits = self.model(X)
         loss = self.loss_fn(logits, y)
         score = self.metric(logits, y)
