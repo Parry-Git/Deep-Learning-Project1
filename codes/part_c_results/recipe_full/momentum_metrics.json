@@ -1,0 +1,19 @@
+{
+  "name": "momentum",
+  "optimizer": "momentum",
+  "scheduler": "none",
+  "initial_lr": 0.05,
+  "final_lr": 0.05,
+  "weight_decay": 0.0,
+  "dropout": 0.0,
+  "early_stopping_patience": null,
+  "best_validation_accuracy": 0.9821,
+  "test_accuracy": 0.9836,
+  "num_updates": 1955,
+  "final_train_loss": 0.03218168852008953,
+  "final_train_accuracy": 0.9875,
+  "final_dev_loss": 0.06438803484470229,
+  "final_dev_accuracy": 0.9796,
+  "curve_path": "part_c_results/recipe_full/momentum_learning_curve.png",
+  "model_path": "part_c_results/recipe_full/momentum/best_model.pickle"
+}

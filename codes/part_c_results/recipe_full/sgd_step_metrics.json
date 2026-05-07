@@ -1,0 +1,19 @@
+{
+  "name": "sgd_step",
+  "optimizer": "sgd",
+  "scheduler": "step",
+  "initial_lr": 0.05,
+  "final_lr": 0.0125,
+  "weight_decay": 0.0,
+  "dropout": 0.0,
+  "early_stopping_patience": null,
+  "best_validation_accuracy": 0.9732,
+  "test_accuracy": 0.9739,
+  "num_updates": 1955,
+  "final_train_loss": 0.0748702475147615,
+  "final_train_accuracy": 0.975,
+  "final_dev_loss": 0.09417538277634666,
+  "final_dev_accuracy": 0.9725,
+  "curve_path": "part_c_results/recipe_full/sgd_step_learning_curve.png",
+  "model_path": "part_c_results/recipe_full/sgd_step/best_model.pickle"
+}

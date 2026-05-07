@@ -1,0 +1,19 @@
+{
+  "name": "recipe_combo",
+  "optimizer": "momentum",
+  "scheduler": "multistep",
+  "initial_lr": 0.05,
+  "final_lr": 0.0125,
+  "weight_decay": 0.0001,
+  "dropout": 0.1,
+  "early_stopping_patience": 8,
+  "best_validation_accuracy": 0.984,
+  "test_accuracy": 0.9856,
+  "num_updates": 1955,
+  "final_train_loss": 0.05774871831745637,
+  "final_train_accuracy": 0.975,
+  "final_dev_loss": 0.05480923759330094,
+  "final_dev_accuracy": 0.9835,
+  "curve_path": "part_c_results/recipe_full/recipe_combo_learning_curve.png",
+  "model_path": "part_c_results/recipe_full/recipe_combo/best_model.pickle"
+}

@@ -2,7 +2,6 @@
 import argparse
 import gzip
 import os
-import pickle
 from pathlib import Path
 from struct import unpack
 
@@ -39,11 +38,9 @@ def load_mnist_train(flatten):
     return images / 255.0, labels
 
 
-def split_train_valid(images, labels, valid_size, seed, idx_path):
+def split_train_valid(images, labels, valid_size, seed):
     rng = np.random.RandomState(seed)
     idx = rng.permutation(np.arange(labels.shape[0]))
-    with open(idx_path, 'wb') as f:
-        pickle.dump(idx, f)
 
     images = images[idx]
     labels = labels[idx]
@@ -110,13 +107,11 @@ def main():
 
     flatten = args.model == 'mlp'
     images, labels = load_mnist_train(flatten=flatten)
-    idx_path = BASE_DIR / f'idx_{args.model}.pickle'
     train_images, train_labels, valid_images, valid_labels = split_train_valid(
         images,
         labels,
         valid_size=args.valid_size,
         seed=args.seed,
-        idx_path=idx_path,
     )
 
     input_dim = train_images.shape[-1] if args.model == 'mlp' else 28 * 28

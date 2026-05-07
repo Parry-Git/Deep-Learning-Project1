@@ -170,6 +170,36 @@ class ReLU(Layer):
         output = np.where(self.input < 0, 0, grads)
         return output
 
+
+class Dropout(Layer):
+    """
+    Inverted dropout. During training, activations are masked and rescaled by
+    1 / (1 - p). During evaluation, this layer is the identity map.
+    """
+    def __init__(self, p=0.5) -> None:
+        super().__init__()
+        assert 0 <= p < 1
+        self.p = p
+        self.mask = None
+        self.training = True
+        self.optimizable = False
+
+    def __call__(self, X):
+        return self.forward(X)
+
+    def forward(self, X):
+        if not self.training or self.p == 0:
+            self.mask = None
+            return X
+        keep_prob = 1 - self.p
+        self.mask = (np.random.rand(*X.shape) < keep_prob) / keep_prob
+        return X * self.mask
+
+    def backward(self, grads):
+        if self.mask is None:
+            return grads
+        return grads * self.mask
+
 class Flatten(Layer):
     """
     Flatten image-like tensors into [batch_size, features].

@@ -1,0 +1,19 @@
+{
+  "name": "adam",
+  "optimizer": "adam",
+  "scheduler": "none",
+  "initial_lr": 0.001,
+  "final_lr": 0.001,
+  "weight_decay": 0.0,
+  "dropout": 0.0,
+  "early_stopping_patience": null,
+  "best_validation_accuracy": 0.9776,
+  "test_accuracy": 0.9798,
+  "num_updates": 1955,
+  "final_train_loss": 0.08262873107062993,
+  "final_train_accuracy": 0.9875,
+  "final_dev_loss": 0.07736217861584137,
+  "final_dev_accuracy": 0.9754,
+  "curve_path": "part_c_results/recipe_full/adam_learning_curve.png",
+  "model_path": "part_c_results/recipe_full/adam/best_model.pickle"
+}

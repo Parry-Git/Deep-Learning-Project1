@@ -1,0 +1,19 @@
+{
+  "name": "dropout",
+  "optimizer": "momentum",
+  "scheduler": "none",
+  "initial_lr": 0.05,
+  "final_lr": 0.05,
+  "weight_decay": 0.0,
+  "dropout": 0.2,
+  "early_stopping_patience": null,
+  "best_validation_accuracy": 0.9839,
+  "test_accuracy": 0.9837,
+  "num_updates": 1955,
+  "final_train_loss": 0.07490442684955748,
+  "final_train_accuracy": 0.9625,
+  "final_dev_loss": 0.07265396692828671,
+  "final_dev_accuracy": 0.9798,
+  "curve_path": "part_c_results/recipe_full/dropout_learning_curve.png",
+  "model_path": "part_c_results/recipe_full/dropout/best_model.pickle"
+}

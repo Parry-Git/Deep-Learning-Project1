@@ -20,6 +20,7 @@ class RunnerM():
         self.dev_scores = []
         self.train_loss = []
         self.dev_loss = []
+        self.lr_history = []
 
     def train(self, train_set, dev_set, **kwargs):
 
@@ -28,14 +29,20 @@ class RunnerM():
         eval_iters = kwargs.get("eval_iters", log_iters)
         self.eval_batch_size = kwargs.get("eval_batch_size", self.eval_batch_size)
         save_dir = kwargs.get("save_dir", "best_model")
+        early_stopping_patience = kwargs.get("early_stopping_patience", None)
+        early_stopping_min_delta = kwargs.get("early_stopping_min_delta", 0.0)
 
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
         best_score = 0
         global_iter = 0
+        no_improve_count = 0
+        should_stop = False
 
         for epoch in range(num_epochs):
+            if hasattr(self.model, 'train'):
+                self.model.train()
             X, y = train_set
 
             assert X.shape[0] == y.shape[0]
@@ -63,6 +70,7 @@ class RunnerM():
                 self.optimizer.step()
                 if self.scheduler is not None:
                     self.scheduler.step()
+                self.lr_history.append(self.optimizer.init_lr)
 
                 should_eval = (
                     global_iter % eval_iters == 0
@@ -73,11 +81,19 @@ class RunnerM():
                     self.dev_scores.append(dev_score)
                     self.dev_loss.append(dev_loss)
 
-                    if dev_score > best_score:
+                    if dev_score > best_score + early_stopping_min_delta:
                         save_path = os.path.join(save_dir, 'best_model.pickle')
                         self.save_model(save_path)
                         print(f"best accuracy performence has been updated: {best_score:.5f} --> {dev_score:.5f}")
                         best_score = dev_score
+                        no_improve_count = 0
+                    else:
+                        no_improve_count += 1
+                        if (
+                            early_stopping_patience is not None
+                            and no_improve_count >= early_stopping_patience
+                        ):
+                            should_stop = True
                 else:
                     self.dev_scores.append(np.nan)
                     self.dev_loss.append(np.nan)
@@ -89,9 +105,17 @@ class RunnerM():
                         print(f"[Dev] loss: {dev_loss}, score: {dev_score}")
 
                 global_iter += 1
+                if should_stop:
+                    print(f"early stopping at epoch {epoch}, iteration {iteration}")
+                    break
+            if should_stop:
+                break
         self.best_score = best_score
 
     def evaluate(self, data_set):
+        was_training = getattr(self.model, 'training', True)
+        if hasattr(self.model, 'eval'):
+            self.model.eval()
         X, y = data_set
         if self.eval_batch_size is not None and X.shape[0] > self.eval_batch_size:
             total_loss = 0.0
@@ -108,11 +132,16 @@ class RunnerM():
                 total_loss += batch_loss * batch_num
                 total_score += batch_score * batch_num
                 total_num += batch_num
-            return total_score / total_num, total_loss / total_num
+            result = total_score / total_num, total_loss / total_num
+            if was_training and hasattr(self.model, 'train'):
+                self.model.train()
+            return result
 
         logits = self.model(X)
         loss = self.loss_fn(logits, y)
         score = self.metric(logits, y)
+        if was_training and hasattr(self.model, 'train'):
+            self.model.train()
         return score, loss
     
     def save_model(self, save_path):

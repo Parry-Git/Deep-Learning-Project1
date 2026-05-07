@@ -5,10 +5,12 @@ class Model_MLP(Layer):
     """
     A model with linear layers. We provied you with this example about a structure of a model.
     """
-    def __init__(self, size_list=None, act_func=None, lambda_list=None):
+    def __init__(self, size_list=None, act_func=None, lambda_list=None, dropout_rate=0.0):
         super().__init__()
         self.size_list = size_list
         self.act_func = act_func
+        self.dropout_rate = dropout_rate
+        self.training = True
 
         if size_list is not None and act_func is not None:
             self.layers = []
@@ -31,6 +33,8 @@ class Model_MLP(Layer):
                 self.layers.append(layer)
                 if i < len(size_list) - 2:
                     self.layers.append(layer_f)
+                    if dropout_rate > 0:
+                        self.layers.append(Dropout(dropout_rate))
 
     def __call__(self, X):
         return self.forward(X)
@@ -48,11 +52,25 @@ class Model_MLP(Layer):
             grads = layer.backward(grads)
         return grads
 
+    def train(self):
+        self.training = True
+        for layer in self.layers:
+            if hasattr(layer, 'training'):
+                layer.training = True
+
+    def eval(self):
+        self.training = False
+        for layer in self.layers:
+            if hasattr(layer, 'training'):
+                layer.training = False
+
     def load_model(self, param_list):
         with open(param_list, 'rb') as f:
             param_list = pickle.load(f)
         self.size_list = param_list[0]
         self.act_func = param_list[1]
+        self.dropout_rate = 0.0
+        self.training = False
 
         self.layers = []
         for i in range(len(self.size_list) - 1):
@@ -94,6 +112,8 @@ class Model_CNN(Layer):
         kernel_size=3,
         pool_size=2,
         num_classes=10,
+        weight_decay_lambda=0.0,
+        dropout_rate=0.0,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -103,6 +123,9 @@ class Model_CNN(Layer):
         self.kernel_size = kernel_size
         self.pool_size = pool_size
         self.num_classes = num_classes
+        self.weight_decay_lambda = weight_decay_lambda
+        self.dropout_rate = dropout_rate
+        self.training = True
         self.padding = kernel_size // 2
         self.stride = 1
 
@@ -125,6 +148,8 @@ class Model_CNN(Layer):
                 stride=self.stride,
                 padding=self.padding,
                 initialize_method=conv_init,
+                weight_decay=weight_decay_lambda > 0,
+                weight_decay_lambda=weight_decay_lambda,
             ),
             ReLU(),
         ]
@@ -138,13 +163,21 @@ class Model_CNN(Layer):
                     stride=self.stride,
                     padding=self.padding,
                     initialize_method=second_conv_init,
+                    weight_decay=weight_decay_lambda > 0,
+                    weight_decay_lambda=weight_decay_lambda,
                 ),
                 ReLU(),
             ])
-        self.layers.extend([
-            Flatten(),
-            Linear(linear_in, num_classes, initialize_method=linear_init),
-        ])
+        self.layers.append(Flatten())
+        if dropout_rate > 0:
+            self.layers.append(Dropout(dropout_rate))
+        self.layers.append(Linear(
+            linear_in,
+            num_classes,
+            initialize_method=linear_init,
+            weight_decay=weight_decay_lambda > 0,
+            weight_decay_lambda=weight_decay_lambda,
+        ))
 
     def __call__(self, X):
         return self.forward(X)
@@ -164,6 +197,18 @@ class Model_CNN(Layer):
         for layer in reversed(self.layers):
             grads = layer.backward(grads)
         return grads
+
+    def train(self):
+        self.training = True
+        for layer in self.layers:
+            if hasattr(layer, 'training'):
+                layer.training = True
+
+    def eval(self):
+        self.training = False
+        for layer in self.layers:
+            if hasattr(layer, 'training'):
+                layer.training = False
     
     def load_model(self, param_list):
         with open(param_list, 'rb') as f:
@@ -178,7 +223,12 @@ class Model_CNN(Layer):
                 and len(param_list['params']) == 3
                 and param_list['params'][-1]['W'].shape[0] == config['second_conv_channels'] * config['input_size'] * config['input_size']
             ) else 2
+        if 'weight_decay_lambda' not in config:
+            config['weight_decay_lambda'] = 0.0
+        if 'dropout_rate' not in config:
+            config['dropout_rate'] = 0.0
         self.__init__(**config)
+        self.eval()
 
         param_idx = 0
         for layer in self.layers:
@@ -202,6 +252,8 @@ class Model_CNN(Layer):
                 'kernel_size': self.kernel_size,
                 'pool_size': self.pool_size,
                 'num_classes': self.num_classes,
+                'weight_decay_lambda': self.weight_decay_lambda,
+                'dropout_rate': self.dropout_rate,
             },
             'params': [],
         }

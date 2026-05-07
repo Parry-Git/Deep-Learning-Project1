@@ -18,7 +18,6 @@ codes/dataset/
 # Trained model weights / checkpoints.
 codes/saved_models/
 codes/best_models/
-codes/figs/
 *.ckpt
 *.pt
 *.pth
@@ -29,6 +28,22 @@ codes/figs/
 *.onnx
 *.h5
 *.hdf5
+
+# LaTeX build byproducts.
+report/*.aux
+report/*.fdb_latexmk
+report/*.fls
+report/*.log
+report/*.out
+report/*.xdv
+report/*.toc
+report/*.synctex.gz
+
+# Local staging area for ModelScope uploads.
+.modelscope_upload/
+
+# Superseded short Part C run; recipe_full is the reported run.
+codes/part_c_results/recipe/
 
 # Large packaged artifacts.
 *.zip
