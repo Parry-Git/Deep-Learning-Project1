@@ -59,6 +59,7 @@ def main() -> int:
         "test_model.py",
         "experiment_part_c_recipe.py",
         "analysis_visualization.py",
+        str(ROOT / "scripts/quick_visualization_check.py"),
         *[str(path.relative_to(CODES)) for path in sorted((CODES / "mynn").glob("*.py"))],
     ]
     run([sys.executable, "-m", "py_compile", *py_files], CODES)

@@ -21,16 +21,21 @@ report/
   report.pdf                    Submitted report PDF
 scripts/
   download_checkpoints.py       Download checkpoints from ModelScope
+  quick_visualization_check.py  Generate a small prediction grid smoke test
   prepare_modelscope_upload.py  Build a local ModelScope upload directory
   verify_submission.py          One-command sanity check for grading
+environment.yml                 Conda environment used for the final checks
 ```
 
-## Setup
+## One-Command Grading Flow
+
+The intended review flow is:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/Parry-Git/Deep-Learning-Project1.git
+cd Deep-Learning-Project1
+conda env create -f environment.yml
+conda activate dl-pj1
 ```
 
 Place the provided MNIST gzip files under:
@@ -45,29 +50,13 @@ codes/dataset/MNIST/
 
 The dataset is not tracked in Git because the project PDF asks not to upload it.
 
-## Download Checkpoints
-
-The trained checkpoints are hosted on ModelScope:
-
-```text
-https://modelscope.cn/models/ParryY/Deep-Learning-Project1
-```
-
-Download and place them into the expected local paths with:
+Then download checkpoints, run the compact evaluation check, and generate a
+small visualization smoke test:
 
 ```bash
 python scripts/download_checkpoints.py
-```
-
-The script first tries the ModelScope SDK if it is installed, then falls back to
-`git clone https://www.modelscope.cn/ParryY/Deep-Learning-Project1.git`.
-
-## Verify
-
-After installing dependencies, placing the dataset, and downloading checkpoints:
-
-```bash
 python scripts/verify_submission.py
+python scripts/quick_visualization_check.py
 ```
 
 Expected checkpoint evaluation results:
@@ -77,6 +66,25 @@ MLP baseline test accuracy: 0.9544
 CNN baseline test accuracy: 0.9779
 Best recipe CNN test accuracy: 0.9856
 ```
+
+The quick visualization script writes:
+
+```text
+codes/part_c_results/smoke_test/prediction_grid.png
+```
+
+## Checkpoints
+
+The trained checkpoints are hosted on ModelScope:
+
+```text
+https://modelscope.cn/models/ParryY/Deep-Learning-Project1
+```
+
+`scripts/download_checkpoints.py` first tries the ModelScope SDK, then falls back
+to `git clone https://www.modelscope.cn/ParryY/Deep-Learning-Project1.git`.
+It copies the checkpoint files into the local paths expected by `test_model.py`
+and the analysis scripts.
 
 ## Reproduce Main Experiments
 

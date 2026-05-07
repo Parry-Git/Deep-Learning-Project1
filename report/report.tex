@@ -56,7 +56,7 @@ MNIST 数据集包含 \(60000\) 张训练图像和 \(10000\) 张测试图像。�
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{p{0.30\linewidth}p{0.58\linewidth}}
+\begin{tabular}{p{0.38\linewidth}p{0.50\linewidth}}
 \toprule
 File & Main responsibility \\
 \midrule
@@ -69,12 +69,33 @@ File & Main responsibility \\
 \texttt{test\_model.py} & saved model evaluation on test set \\
 Part C recipe script & optimization and regularization experiments \\
 Analysis script & error analysis and visualization \\
+\texttt{scripts/download\_checkpoints.py} & download ModelScope checkpoints into expected local paths \\
+\texttt{scripts/verify\_submission.py} & compile and evaluate the main saved models \\
+\texttt{quick\_visualization\_check.py} & generate a small prediction-grid visualization smoke test \\
 \bottomrule
 \end{tabular}
 \caption{Main code files and their responsibilities.}
 \end{table}
 
-主要复现实验命令如下：
+助教从空仓库复现检查时，可使用如下流程：
+\begin{verbatim}
+git clone https://github.com/Parry-Git/Deep-Learning-Project1.git
+cd Deep-Learning-Project1
+conda env create -f environment.yml
+conda activate dl-pj1
+# place the provided MNIST gzip files under codes/dataset/MNIST/
+python scripts/download_checkpoints.py
+python scripts/verify_submission.py
+python scripts/quick_visualization_check.py
+\end{verbatim}
+
+其中 \texttt{quick\_visualization\_check.py} 会生成如下文件：
+\begin{verbatim}
+codes/part_c_results/smoke_test/prediction_grid.png
+\end{verbatim}
+该图用于快速确认 checkpoint 加载、测试集读取和 Matplotlib 绘图流程均正常。
+
+完整复现实验命令如下：
 \begin{verbatim}
 cd codes
 python test_train.py --model mlp
@@ -575,8 +596,10 @@ Best recipe CNN & \textbf{0.98400} & \textbf{0.98560} & Momentum + MultiStepLR +
     \item \texttt{python -m py\_compile} 检查所有实验脚本和 \texttt{mynn/} 模块。
     \item \texttt{python test\_model.py --model mlp} 输出 test accuracy 0.9544。
     \item \texttt{python test\_model.py --model cnn} 输出 test accuracy 0.9779。
+    \item 使用 \texttt{recipe\_combo} checkpoint 评估 CNN，输出 test accuracy 0.9856。
     \item \texttt{python experiment\_part\_c\_recipe.py} 成功生成 Part C recipe results。
     \item \texttt{python analysis\_visualization.py} 成功生成 error analysis figures。
+    \item \texttt{python scripts/quick\_visualization\_check.py} 成功生成 prediction grid smoke-test figure。
     \item \texttt{latexmk -xelatex -interaction=nonstopmode report.tex} 成功生成本报告 PDF。
 \end{itemize}
 

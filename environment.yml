@@ -1,0 +1,11 @@
+name: dl-pj1
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy>=1.23
+  - matplotlib>=3.7
+  - tqdm>=4.64
+  - pip
+  - pip:
+      - modelscope>=1.36
