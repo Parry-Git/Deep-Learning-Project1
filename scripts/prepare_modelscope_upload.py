@@ -23,6 +23,13 @@ CHECKPOINTS = {
     "codes/part_c_results/recipe_full/recipe_combo/best_model.pickle": "checkpoints/recipe_full/recipe_combo/best_model.pickle",
 }
 
+DATASET = {
+    "codes/dataset/MNIST/train-images-idx3-ubyte.gz": "dataset/MNIST/train-images-idx3-ubyte.gz",
+    "codes/dataset/MNIST/train-labels-idx1-ubyte.gz": "dataset/MNIST/train-labels-idx1-ubyte.gz",
+    "codes/dataset/MNIST/t10k-images-idx3-ubyte.gz": "dataset/MNIST/t10k-images-idx3-ubyte.gz",
+    "codes/dataset/MNIST/t10k-labels-idx1-ubyte.gz": "dataset/MNIST/t10k-labels-idx1-ubyte.gz",
+}
+
 METRICS = {
     "codes/part_c_results/recipe_full/summary.json": "metrics/recipe_full_summary.json",
     "codes/part_c_results/error_analysis/analysis_summary.json": "metrics/error_analysis_summary.json",
@@ -60,6 +67,11 @@ https://github.com/Parry-Git/Deep-Learning-Project1
 The `checkpoints/recipe_full/` directory also includes the saved models for
 SGD, Momentum, StepLR, Adam, L2 weight decay, and dropout experiments.
 
+## Dataset
+
+The MNIST dataset (gzipped IDX format) is bundled under `dataset/MNIST/` so
+that the full reproduction workflow works without any external download.
+
 ## Download
 
 ```bash
@@ -69,7 +81,7 @@ git clone https://www.modelscope.cn/ParryY/Deep-Learning-Project1.git
 or from the project repository:
 
 ```bash
-python scripts/download_checkpoints.py
+python scripts/download_checkpoints.py   # downloads checkpoints + dataset
 python scripts/verify_submission.py
 ```
 
@@ -95,6 +107,8 @@ def main() -> int:
 
     for src, dst in CHECKPOINTS.items():
         copy_file(src, dst)
+    for src, dst in DATASET.items():
+        copy_file(src, dst)
     for src, dst in METRICS.items():
         copy_file(src, dst)
 
@@ -102,6 +116,7 @@ def main() -> int:
         "code_repository": "https://github.com/Parry-Git/Deep-Learning-Project1",
         "modelscope_model": "https://modelscope.cn/models/ParryY/Deep-Learning-Project1",
         "checkpoints": list(CHECKPOINTS.values()),
+        "dataset": list(DATASET.values()),
         "metrics": list(METRICS.values()),
         "expected_test_accuracy": {
             "mlp": 0.9544,

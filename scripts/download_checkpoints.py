@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download Project 1 checkpoints from ModelScope into local grading paths."""
+"""Download Project 1 checkpoints and MNIST dataset from ModelScope."""
 
 from __future__ import annotations
 
@@ -25,6 +25,13 @@ CHECKPOINT_MAP = {
     "checkpoints/recipe_full/l2/best_model.pickle": "codes/part_c_results/recipe_full/l2/best_model.pickle",
     "checkpoints/recipe_full/dropout/best_model.pickle": "codes/part_c_results/recipe_full/dropout/best_model.pickle",
     "checkpoints/recipe_full/recipe_combo/best_model.pickle": "codes/part_c_results/recipe_full/recipe_combo/best_model.pickle",
+}
+
+DATASET_MAP = {
+    "dataset/MNIST/train-images-idx3-ubyte.gz": "codes/dataset/MNIST/train-images-idx3-ubyte.gz",
+    "dataset/MNIST/train-labels-idx1-ubyte.gz": "codes/dataset/MNIST/train-labels-idx1-ubyte.gz",
+    "dataset/MNIST/t10k-images-idx3-ubyte.gz": "codes/dataset/MNIST/t10k-images-idx3-ubyte.gz",
+    "dataset/MNIST/t10k-labels-idx1-ubyte.gz": "codes/dataset/MNIST/t10k-labels-idx1-ubyte.gz",
 }
 
 PROXY_ENV_VARS = [
@@ -75,9 +82,9 @@ def snapshot_with_git(model_id: str) -> Path:
     return temp_dir
 
 
-def copy_checkpoints(source_dir: Path) -> None:
+def copy_files(source_dir: Path, file_map: dict[str, str], label: str) -> None:
     missing = []
-    for src_rel, dst_rel in CHECKPOINT_MAP.items():
+    for src_rel, dst_rel in file_map.items():
         src = source_dir / src_rel
         dst = ROOT / dst_rel
         if not src.exists():
@@ -88,7 +95,7 @@ def copy_checkpoints(source_dir: Path) -> None:
         print(f"copied {src_rel} -> {dst_rel}")
     if missing:
         raise FileNotFoundError(
-            "Missing checkpoint files in ModelScope snapshot:\n"
+            f"Missing {label} files in ModelScope snapshot:\n"
             + "\n".join(f"- {item}" for item in missing)
         )
 
@@ -104,7 +111,8 @@ def main() -> int:
     source_dir = snapshot_with_sdk(args.model_id)
     if source_dir is None:
         source_dir = snapshot_with_git(args.model_id)
-    copy_checkpoints(source_dir)
+    copy_files(source_dir, CHECKPOINT_MAP, "checkpoint")
+    copy_files(source_dir, DATASET_MAP, "dataset")
     return 0
 
 
