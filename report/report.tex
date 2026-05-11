@@ -1,606 +1,510 @@
 \documentclass[11pt,fontset=fandol]{ctexart}
 
-\usepackage[a4paper, margin=1in]{geometry}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\usepackage[a4paper, margin=0.9in]{geometry}
+\usepackage{amsmath, amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{array}
-\usepackage{placeins}
+\usepackage{array, tabularx}
+\usepackage{float}
 \usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{caption, subcaption}
+\usepackage{enumitem}
+\usepackage{fancyvrb}
+\usepackage{listings}
 
-\title{Neural Network and Deep Learning Project 1 Report}
+% ── Code listing style ──
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{gray!40},
+  xleftmargin=1em,
+  framexleftmargin=0.5em,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+
+% ── Typography ──
+\captionsetup{font=small, labelfont=bf, skip=4pt}
+\hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue!60!black}
+\setlength{\abovecaptionskip}{6pt}
+\setlength{\belowcaptionskip}{2pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlist{nosep, leftmargin=1.5em}
+
+\title{\bfseries Neural Network and Deep Learning --- Project\,1}
 \author{姓名：于翔 \quad 学号：23307130202}
 \date{\today}
 
 \begin{document}
 \maketitle
 
+% ======================================================================
 \begin{abstract}
-本项目研究 MNIST 手写数字分类任务。根据课程要求，我首先基于 NumPy 实现 MLP baseline，包括线性层前向/反向传播、ReLU、softmax cross entropy、SGD 训练和学习曲线记录；随后手写实现二维卷积算子，并构建一个小型两层 CNN，在相同数据划分和相近训练设置下与 MLP 进行比较。完成 Part A 和 Part B 后，我选择 optimization 与 regularization 两个额外方向进行探索，系统比较 SGD、Momentum、Adam、learning rate scheduling、weight decay、dropout 和组合 recipe。此外，我进一步进行 detailed visualization，包括 confusion matrix、错分类样本、MLP 权重、CNN 卷积核以及两层卷积中间 feature maps。
-
-实验结果显示，MLP baseline 的 test accuracy 为 0.95440；手写 CNN baseline 提升到 0.97790；最佳训练 recipe 进一步达到 0.98560。错误分析显示，剩余错误主要集中在形状相似的数字对，例如 \(4/9\)、\(5/3\)、\(7/2\) 和 \(8/0\)。卷积中间特征可视化表明，浅层卷积确实会强化笔画和边缘区域，但第二层卷积更像是在组合局部 stroke patterns，而不是直接输出人眼意义上的完整轮廓图。
+\noindent
+本项目研究 MNIST 手写数字分类任务。首先基于 NumPy 从零实现 MLP baseline，包括线性层前向/反向传播、ReLU、softmax cross-entropy 和 SGD 训练；随后手写二维卷积算子，构建两层 CNN 并与 MLP 比较。完成基础部分后，选择 \textbf{optimization} 与 \textbf{regularization} 两个方向做控制变量实验。实验显示：MLP test accuracy $0.9544$；手写 CNN 提升到 $0.9779$（参数量反而更少）；最佳训练 recipe 达 $0.9856$。所有算子均通过数值梯度检验（相对误差 $<10^{-8}$）。
 \end{abstract}
 
-\section{Project Requirements and Experimental Setup}
-
-\subsection{Requirements}
-
-课程文档要求本项目只使用给定的 MNIST 数据集，并且不能调用 PyTorch 等深度学习框架中直接完成任务的神经网络模块。本项目的核心目标不是追求最高精度，而是完成可运行、可解释、可比较的神经网络实现。报告需要覆盖以下内容：
-
-\begin{itemize}
-    \item Part A: MLP baseline，包括线性层、softmax cross entropy、训练/验证表现和 learning curve。
-    \item Part B: 手写 \texttt{conv2D}，构建 CNN，并与 MLP 在合理公平设置下比较。
-    \item Part C: 选择两个额外方向，并对每个方向解释改动、基线、结果和结论。
-    \item Main results table、detailed visualization 和 discussion。
-\end{itemize}
-
-本文选择的两个 Part C 方向是：
-\begin{enumerate}
-    \item Optimization: 从训练算法和学习率策略角度探索模型效果改善。
-    \item Regularization: 从 weight decay、dropout 和 early stopping 角度分析泛化表现。
-\end{enumerate}
+% ======================================================================
+\section{Experimental Setup}
 
 \subsection{Dataset and Split}
 
-MNIST 数据集包含 \(60000\) 张训练图像和 \(10000\) 张测试图像。每张图像为 \(28 \times 28\) 灰度图，标签属于 \(\{0,\ldots,9\}\)。令样本为 \((x_i,y_i)\)，其中
-\[
-    x_i \in [0,1]^{28\times 28}, \qquad y_i \in \{0,1,\ldots,9\}.
-\]
-所有输入像素由 \([0,255]\) 归一化到 \([0,1]\)。实验固定随机种子为 309，并从原始训练集划分 \(10000\) 张作为 validation set，剩余 \(50000\) 张作为 training set。测试集只用于最终 test accuracy 和错误分析。
+MNIST 包含 $60\,000$ 张训练图像和 $10\,000$ 张测试图像，每张 $28\times28$ 灰度图，标签 $y\in\{0,\dots,9\}$，像素归一化到 $[0,1]$。固定种子 $233$，划分 $10\,000$ 张为 validation set，$50\,000$ 张为 training set；测试集仅用于最终评估。
 
-\subsection{Code Organization and Reproducibility}
+\subsection{Code Organization and Gradient Verification}
 
-主要实现位于 \texttt{codes/} 目录下。核心代码映射如下：
+主要实现位于 \texttt{codes/} 目录：\texttt{mynn/op.py}（Linear, conv2D, ReLU, MaxPool2D, Dropout, CE loss），\texttt{mynn/models.py}（Model\_MLP, Model\_CNN），\texttt{mynn/optimizer.py}（SGD, Momentum, Adam 等），\texttt{mynn/lr\_scheduler.py}（StepLR, MultiStepLR, ExponentialLR），\texttt{mynn/runner.py}（训练循环），以及训练脚本 \texttt{test\_train.py}、Part C 实验脚本 \texttt{experiment\_part\_c\_recipe.py} 和分析脚本 \texttt{analysis\_visualization.py}。
 
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{p{0.38\linewidth}p{0.50\linewidth}}
+为验证实现正确性，使用中心差分法（$\epsilon=10^{-5}$）对所有核心算子做数值梯度检验：
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}llr@{\qquad}llr@{}}
 \toprule
-File & Main responsibility \\
+Operator & w.r.t. & Rel.\ error & Operator & w.r.t. & Rel.\ error \\
 \midrule
-\texttt{mynn/op.py} & Core layers and loss: linear, convolution, activation, pooling, dropout, softmax cross entropy \\
-\texttt{mynn/models.py} & \texttt{Model\_MLP}, \texttt{Model\_CNN}, forward/backward, save/load \\
-\texttt{mynn/optimizer.py} & \texttt{SGD}, \texttt{MomentGD}, \texttt{AdaGrad}, \texttt{RMSProp}, \texttt{Adam} \\
-\texttt{mynn/lr\_scheduler.py} & \texttt{StepLR}, \texttt{MultiStepLR}, \texttt{ExponentialLR} \\
-\texttt{mynn/runner.py} & training loop, evaluation, model saving, early stopping, train/eval mode \\
-\texttt{test\_train.py} & Part A/B training entry \\
-\texttt{test\_model.py} & saved model evaluation on test set \\
-Part C recipe script & optimization and regularization experiments \\
-Analysis script & error analysis and visualization \\
-\texttt{scripts/download\_checkpoints.py} & download ModelScope checkpoints into expected local paths \\
-\texttt{scripts/verify\_submission.py} & compile and evaluate the main saved models \\
-\texttt{quick\_visualization\_check.py} & generate a small prediction-grid visualization smoke test \\
+Linear      & $W$      & $7.4\times10^{-11}$ & conv2D    & $W$ & $3.2\times10^{-11}$ \\
+Linear      & $b$      & $1.9\times10^{-11}$ & conv2D    & $X$ & $2.6\times10^{-10}$ \\
+Linear      & $X$      & $2.5\times10^{-9}$  & MaxPool2D & $X$ & $1.1\times10^{-10}$ \\
+Softmax CE  & logits   & $2.4\times10^{-9}$  & & & \\
 \bottomrule
 \end{tabular}
-\caption{Main code files and their responsibilities.}
+\caption{Numerical gradient check. All relative errors $< 10^{-8}$.}\label{tab:gradcheck}
 \end{table}
 
-助教从空仓库复现检查时，可使用如下流程：
-\begin{verbatim}
+\subsection{Reproducibility and Links}
+
+\begin{lstlisting}[language=bash]
 git clone https://github.com/Parry-Git/Deep-Learning-Project1.git
 cd Deep-Learning-Project1
-conda env create -f environment.yml
-conda activate dl-pj1
-# place the provided MNIST gzip files under codes/dataset/MNIST/
-python scripts/download_checkpoints.py
-python scripts/verify_submission.py
-python scripts/quick_visualization_check.py
-\end{verbatim}
+conda env create -f environment.yml && conda activate dl-pj1
+python scripts/download_checkpoints.py  # download saved models
+python scripts/verify_submission.py     # verify accuracy
+python codes/gradient_check.py          # gradient check
+\end{lstlisting}
 
-其中 \texttt{quick\_visualization\_check.py} 会生成如下文件：
-\begin{verbatim}
-codes/part_c_results/smoke_test/prediction_grid.png
-\end{verbatim}
-该图用于快速确认 checkpoint 加载、测试集读取和 Matplotlib 绘图流程均正常。
-
-完整复现实验命令如下：
-\begin{verbatim}
-cd codes
-python test_train.py --model mlp
-python test_train.py --model cnn
-python test_model.py --model mlp
-python test_model.py --model cnn
-python experiment_part_c_recipe.py \
-  --recipes sgd,momentum,sgd_step,adam,l2,dropout,recipe_combo \
-  --epochs 5 --eval-batch-size 1000 \
-  --out-dir part_c_results/recipe_full
-python analysis_visualization.py
-\end{verbatim}
-
-\subsection{Submission Links}
-
-课程要求在最终 PDF 中提供代码仓库链接和训练模型/权重链接。对应链接如下：
+\noindent\textbf{Known issues:}
 \begin{itemize}
-    \item Code repository: \href{https://github.com/Parry-Git/Deep-Learning-Project1}{GitHub repository}
-    \item Trained checkpoints: \href{https://modelscope.cn/models/ParryY/Deep-Learning-Project1}{ModelScope checkpoint repository}
+    \item \textbf{Git LFS.}\; 模型 checkpoint 以 Git LFS 存储在 ModelScope。若未安装 \texttt{git-lfs}，\texttt{git clone} 只会下载 pointer 文件（$\sim$131\,B），导致 \texttt{pickle.load} 报错 \texttt{invalid load key, 'v'.}。解决方法：
+\begin{lstlisting}[language=bash]
+brew install git-lfs   # macOS; Linux: apt install git-lfs
+git lfs install
+\end{lstlisting}
+    安装后重新运行 \texttt{download\_checkpoints.py} 即可。
+    \item \textbf{NumPy 版本兼容.}\; checkpoint 以 NumPy\,$\ge$\,2.0 序列化，其内部模块路径为 \texttt{numpy.\_core}。若加载环境为 NumPy\,1.x（路径为 \texttt{numpy.core}），反序列化会抛出 \texttt{ModuleNotFoundError}。评估脚本已内置兼容 shim；如遇此错误，升级 NumPy 或确认使用 \texttt{environment.yml} 创建环境。
 \end{itemize}
 
+\noindent\textbf{Links:}\;
+Code: \href{https://github.com/Parry-Git/Deep-Learning-Project1}{GitHub}\enspace|\enspace
+Checkpoints: \href{https://modelscope.cn/models/ParryY/Deep-Learning-Project1}{ModelScope}
+
+% ======================================================================
 \section{Part A: MLP Baseline}
 
-\subsection{Model Definition}
+\subsection{Architecture and Formulation}
 
-MLP 将输入图像展平为 \(784\)-维向量：
+MLP 将 $28\times28$ 图像展平为 $784$-维向量，经两层隐藏层输出 logits：
 \[
-    x \in \mathbb{R}^{28\times 28} \quad \mapsto \quad \mathrm{vec}(x) \in \mathbb{R}^{784}.
+    784 \;\xrightarrow{\text{Linear+ReLU}}\; 32
+    \;\xrightarrow{\text{Linear+ReLU}}\; 16
+    \;\xrightarrow{\text{Linear}}\; 10.
 \]
-本实验使用两层隐藏层：
-\[
-    784 \rightarrow 32 \rightarrow 16 \rightarrow 10.
-\]
-对第 \(l\) 层，线性变换定义为
-\[
-    Z^{(l)} = A^{(l-1)} W^{(l)} + b^{(l)},
-\]
-其中 \(A^{(0)} = X\)，\(W^{(l)}\in \mathbb{R}^{d_{l-1}\times d_l}\)，\(b^{(l)}\in \mathbb{R}^{1\times d_l}\)。隐藏层使用 ReLU:
-\[
-    A^{(l)} = \mathrm{ReLU}(Z^{(l)}) = \max(0, Z^{(l)}).
-\]
-最后一层输出 logits \(z\in\mathbb{R}^{10}\)，用于分类。
+第 $l$ 层前向传播：$Z^{(l)} = A^{(l-1)} W^{(l)} + b^{(l)}$，$A^{(l)} = \mathrm{ReLU}(Z^{(l)})$。隐藏层维度选择 $32 \to 16$ 形成逐层压缩的瓶颈结构，在参数量受限（总计 $25\,818$）的条件下保留足够表达能力。输入维度 $784$ 远大于隐藏维度，第一层 $784 \times 32$ 占据绝大多数参数，是 MLP 参数效率较低的主要来源。
 
-\subsection{Softmax Cross Entropy}
+\smallskip\noindent\textbf{权重初始化.}\;
+所有隐藏层权重采用 He 初始化：$W^{(l)} \sim \mathcal{N}\!\left(0,\, \sqrt{2 / n_\text{in}}\right)$，其中 $n_\text{in}$ 为该层输入维度。He 初始化针对 ReLU 激活函数的半区间特性（期望约一半神经元输出为零）设计，使各层前向传播的方差保持稳定，避免信号在深层指数衰减或爆炸。偏置项 $b^{(l)}$ 初始化为零。
 
-对一个样本的 logits \(z\)，softmax 概率为
-\[
-    p_k = \frac{\exp(z_k - \max_j z_j)}{\sum_{r=1}^{10}\exp(z_r-\max_j z_j)}.
-\]
-减去 \(\max_j z_j\) 不改变 softmax 结果，但能提高数值稳定性。给定真实标签 \(y\)，cross entropy loss 为
-\[
-    \ell(z,y) = -\log p_y.
-\]
-对 batch size 为 \(N\) 的 mini-batch，平均损失为
-\[
-    L = -\frac{1}{N}\sum_{i=1}^{N}\log p_{i,y_i}.
-\]
-softmax 和 cross entropy 合并后的梯度为
-\[
-    \frac{\partial L}{\partial z_{i,k}}
-    = \frac{1}{N}\left(p_{i,k} - \mathbb{I}[y_i=k]\right).
-\]
+\smallskip\noindent\textbf{ReLU 激活函数.}\;
+$\mathrm{ReLU}(x) = \max(0, x)$。相比 sigmoid/tanh，ReLU 在正半轴梯度恒为 $1$，有效缓解深层网络中的梯度消失问题；同时稀疏激活（负值区域输出为零）有助于学习更具判别性的特征。
 
-\subsection{Backpropagation of Linear and ReLU Layers}
-
-设线性层输出为 \(Y=XW+b\)，下一层传回梯度 \(G=\frac{\partial L}{\partial Y}\)。则线性层反向传播为
+\smallskip\noindent\textbf{Softmax cross-entropy.}\;
+为避免指数溢出，计算时先减去 logits 最大值：
 \[
-    \frac{\partial L}{\partial W}=X^\top G,\qquad
-    \frac{\partial L}{\partial b}=\sum_{i=1}^{N}G_i,\qquad
-    \frac{\partial L}{\partial X}=GW^\top.
+    p_k = \frac{\exp(z_k - \max_j z_j)}{\displaystyle\sum_{r} \exp(z_r - \max_j z_j)},
+    \qquad
+    \ell = -\log p_y.
 \]
-ReLU 的梯度为
-\[
-    \frac{\partial L}{\partial Z}
-    = \frac{\partial L}{\partial A}\odot \mathbb{I}[Z>0].
-\]
+对 batch 中第 $i$ 个样本的 logit $z_{i,k}$，将 softmax 与 cross-entropy 合并求导可得到简洁的梯度形式：
+$\dfrac{\partial L}{\partial z_{i,k}} = \dfrac{p_{i,k} - \mathbb{I}[y_i{=}k]}{N}$，
+其中 $N$ 为 batch size。合并求导避免了分别计算 softmax 的 Jacobian 矩阵，数值上也更加稳定。
 
-对应实现位于 \texttt{mynn/op.py} 中的 \texttt{Linear.forward}、\texttt{Linear.backward}、\texttt{ReLU.backward} 和 \texttt{MultiCrossEntropyLoss.backward}。模型结构由 \texttt{mynn/models.py} 中的 \texttt{Model\_MLP} 组织，训练过程由 \texttt{mynn/runner.py} 负责。
+\smallskip\noindent\textbf{Linear backward.}\;
+设上游梯度为 $G = \partial L / \partial Z^{(l)}$，则各参数和输入的梯度为：
+$\partial L/\partial W = X^\top G$,\;
+$\partial L/\partial b = \sum_i G_i$,\;
+$\partial L/\partial X = G W^\top$。
+其中 $\partial L/\partial X$ 作为下一层反向传播的输入，实现了链式法则的逐层回传。
 
-\subsection{Training Setting}
+\smallskip\noindent\textbf{ReLU backward.}\;
+$\partial L/\partial Z = (\partial L/\partial A) \odot \mathbb{I}[Z{>}0]$。
+ReLU 的梯度为分段常数：正区间传递上游梯度，负区间完全截断。前向传播时需缓存 $Z$ 用于反向判断激活状态。
 
-\begin{table}[htbp]
-\centering
-\begin{tabular}{ll}
+\subsection{Training and Results}
+
+\noindent
+\begin{minipage}[t]{0.48\textwidth}
+\centering\small
+\captionof{table}{Part A configuration.}\label{tab:mlp-config}
+\vspace{2pt}
+\begin{tabular}{@{}ll@{}}
 \toprule
-Item & Setting \\
-\midrule
-Model & MLP \\
-Architecture & \(784 \rightarrow 32 \rightarrow 16 \rightarrow 10\) \\
-Activation & ReLU \\
-Initialization & He-style scaling for ReLU hidden layers \\
-Loss & Softmax cross entropy \\
-Optimizer & SGD \\
-Learning rate & 0.1 \\
-Batch size & 128 \\
-Epochs & 5 \\
-Train/validation split & 50000 / 10000 \\
+Optimizer / lr & SGD, $\eta\!=\!0.1$ \\
+Batch / Epochs & 128 / 5 \\
+Init & He (ReLU layers) \\
+Parameters & 25\,818 \\
 \bottomrule
 \end{tabular}
-\caption{Part A MLP baseline setting.}
-\end{table}
-
-\subsection{Results and Analysis}
-
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lc}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering\small
+\captionof{table}{Part A results.}\label{tab:mlp-results}
+\vspace{2pt}
+\begin{tabular}{@{}lc@{}}
 \toprule
-Metric & Accuracy \\
+Metric & Value \\
 \midrule
-Best validation accuracy & 0.94790 \\
-Test accuracy & 0.95440 \\
+Best val acc & 0.9479 \\
+Test acc & 0.9544 \\
 \bottomrule
 \end{tabular}
-\caption{Part A MLP baseline results.}
-\end{table}
+\end{minipage}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.85\linewidth]{../codes/figs/part_a_mlp_learning_curve.png}
-\caption{Learning curve of the MLP baseline.}
+\includegraphics[width=0.82\linewidth]{../codes/figs/part_a_mlp_learning_curve.png}
+\caption{MLP baseline learning curve.}\label{fig:mlp-curve}
 \end{figure}
 
-MLP baseline 能够在 MNIST 上达到 0.95440 的 test accuracy，说明手写线性层、softmax cross entropy 和反向传播实现是有效的。但 MLP 的主要限制也很明显：它把 \(28\times 28\) 图像展平成一维向量，打破了图像局部空间结构。相邻像素之间的关系、局部笔画模式和平移等价性都需要模型从数据中重新学习，因此参数利用效率不如 CNN。
+从学习曲线（图~\ref{fig:mlp-curve}）可以观察到：训练 loss 在前 2 个 epoch 内快速下降并逐步趋于平稳；验证集 accuracy 约在 epoch\,3 后开始收敛，最终 test accuracy 达到 $0.9544$，验证了所有算子实现的正确性。
 
-\section{Part B: CNN Model and MLP-vs-CNN Comparison}
+\smallskip\noindent\textbf{MLP 的局限性.}\;
+MLP 将二维图像展平为一维向量，完全丢失了像素的空间邻域关系。这意味着：\textbf{(1)} 相邻像素间的局部相关性（如笔画的连续性、边缘方向）无法被结构性利用，必须由全连接权重从数据中隐式学习；\textbf{(2)} 平移等价性（同一数字出现在图像不同位置）无法共享特征，网络需为每个空间位置分别学习检测器，显著增加所需参数量和训练样本量。这构成了引入卷积结构的核心动机。
 
-\subsection{Convolution Definition}
+% ======================================================================
+\section{Part B: CNN Model}
 
-CNN 的核心是二维卷积。输入记为 \(X\in\mathbb{R}^{N\times C_{\mathrm{in}}\times H\times W}\)，卷积核为
-\[
-    K\in\mathbb{R}^{C_{\mathrm{out}}\times C_{\mathrm{in}}\times R\times S},
-\]
-bias 为 \(b\in\mathbb{R}^{C_{\mathrm{out}}}\)。在 stride 为 \(t\)、padding 后输入为 \(\tilde X\) 时，输出为
+\subsection{Convolution and Pooling}
+
+输入 $X \in \mathbb{R}^{N \times C_\text{in} \times H \times W}$，卷积核 $K \in \mathbb{R}^{C_\text{out} \times C_\text{in} \times R \times S}$。在 stride $t$、padding $p$ 下，首先对输入做零填充得到 $\tilde{X}$（四周各补 $p$ 行/列零值），输出空间尺寸为 $H_\text{out} = \lfloor(H + 2p - R)/t\rfloor + 1$，前向计算为：
 \[
     Y_{n,o,i,j}
-    =
-    b_o + \sum_{c=1}^{C_{\mathrm{in}}}\sum_{r=1}^{R}\sum_{s=1}^{S}
-    K_{o,c,r,s}\,
-    \tilde X_{n,c,it+r,jt+s}.
+    = b_o + \textstyle\sum_{c,r,s} K_{o,c,r,s}\, \tilde{X}_{n,c,\,it+r,\,jt+s}.
 \]
-本项目中的卷积实现没有调用深度学习框架，而是在 \texttt{mynn/op.py} 的 \texttt{conv2D} 中使用 NumPy 的 sliding window view 构造局部感受野，并用 \texttt{einsum} 完成前向卷积。
+实现上，前向传播使用 \texttt{numpy.lib.stride\_tricks.sliding\_window\_view} 将输入展开为所有感受野窗口的视图（无数据拷贝），再通过 \texttt{np.einsum} 完成卷积核与窗口的批量内积，避免显式四重循环，在纯 NumPy 下获得较好的计算效率。
 
-\subsection{Convolution Backpropagation}
+\smallskip\noindent
+\textbf{Backward:}\;
+设上游梯度 $G = \partial L / \partial Y \in \mathbb{R}^{N \times C_\text{out} \times H_\text{out} \times W_\text{out}}$，卷积核梯度为各输出位置处输入窗口与对应上游梯度的相关：
+$\partial L/\partial K_{o,c,r,s} = \sum_{n,i,j} G_{n,o,i,j}\, \tilde{X}_{n,c,it+r,jt+s}$；
+偏置梯度为上游梯度沿 batch 和空间维度的求和：
+$\partial L/\partial b_o = \sum_{n,i,j} G_{n,o,i,j}$。
+输入梯度的计算需将上游梯度「散射」回对应的输入位置：遍历 kernel 的每个 $(r,s)$ 偏移，将 $G$ 与 $K$ 的对应切片相乘后累加到 $\partial L / \partial \tilde{X}$ 的相应位置，最后去除 padding 区域的梯度。当 stride $> 1$ 时需注意步长引起的索引间隔。
 
-令 \(G=\frac{\partial L}{\partial Y}\)。卷积核梯度为
-\[
-    \frac{\partial L}{\partial K_{o,c,r,s}}
-    =
-    \sum_{n,i,j}G_{n,o,i,j}\,
-    \tilde X_{n,c,it+r,jt+s}.
-\]
-bias 梯度为
-\[
-    \frac{\partial L}{\partial b_o}=\sum_{n,i,j}G_{n,o,i,j}.
-\]
-输入梯度则将每个输出位置的梯度按照对应卷积核权重散射回输入窗口。实现中显式遍历 kernel 的空间维度 \((r,s)\)，并累加到 padded input gradient；若 padding 非零，再裁剪回原输入大小。该实现重点是正确性和可解释性，而不是最高速度。
+\smallskip\noindent
+\textbf{Max pooling:}\;
+$Y_{n,c,i,j} = \max_{0 \le r,s < P} X_{n,c,Pi+r,Pj+s}$。前向传播时记录每个池化窗口内最大值的位置索引；反向传播仅将上游梯度传递给该最大值位置，其余位置梯度为零。当窗口内存在多个相同最大值（tie）时，梯度在这些位置间平均分配，保证梯度总量守恒。Max pooling 起到下采样作用，将特征图空间分辨率减半，同时提供局部平移不变性。
 
-\subsection{Pooling and CNN Architecture}
+\subsection{Architecture and Fair Comparison}
 
-Max pooling 定义为
-\[
-    Y_{n,c,i,j} = \max_{0\le r < P,\ 0\le s<P} X_{n,c,Pi+r,Pj+s}.
-\]
-反向传播时，梯度只传给最大值所在位置；若有多个相同最大值，代码中将梯度平均分配给这些位置。
+\begin{gather*}
+\text{Conv}(1{\to}4,\;3{\times}3,\;\text{pad}{=}1)
+\;\to\; \text{ReLU}
+\;\to\; \text{MaxPool}(2{\times}2) \\
+\to\; \text{Conv}(4{\to}8,\;3{\times}3,\;\text{pad}{=}1)
+\;\to\; \text{ReLU}
+\;\to\; \text{Flatten}
+\;\to\; \text{Linear}(1568 \to 10)
+\end{gather*}
 
-CNN 结构为
-\[
-\begin{aligned}
-    &\mathrm{Conv}(1\rightarrow4,3\times3,\mathrm{padding}=1)
-    \rightarrow \mathrm{ReLU}
-    \rightarrow \mathrm{MaxPool}(2\times2) \\
-    &\rightarrow \mathrm{Conv}(4\rightarrow8,3\times3,\mathrm{padding}=1)
-    \rightarrow \mathrm{ReLU}
-    \rightarrow \mathrm{Flatten}
-    \rightarrow \mathrm{Linear}(8\cdot14\cdot14\rightarrow10).
-\end{aligned}
-\]
-这一结构保留两层卷积以便观察中间特征，同时通道数较小，适合手写 NumPy 实现在 CPU 上训练。
+该架构设计的考量如下：第一层卷积 $1 \to 4$ 通道使用 $3 \times 3$ 小卷积核配合 padding$=$1 保持空间尺寸不变（$28 \times 28$），随后 $2 \times 2$ max pooling 将分辨率降至 $14 \times 14$；第二层卷积 $4 \to 8$ 通道进一步提取高阶特征，输出 $8 \times 14 \times 14 = 1568$ 维展平后接全连接分类器。通道数 $4 \to 8$ 遵循``空间减半、通道加倍''的经典范式，使各层计算量大致均衡。整个网络仅 $16\,026$ 个参数，远少于 MLP 的 $25\,818$ 个，但归纳偏置更强。
 
-\subsection{Training Setting}
+\smallskip\noindent\textbf{公平比较设置.}\;
+为使对比有意义，二者共享数据划分、随机种子、batch size (128)、训练 epochs (5)，均为固定学习率 SGD（无 momentum/dropout/scheduler）。学习率通过预试验分别选定：MLP $\eta{=}0.1$，CNN $\eta{=}0.05$。CNN 学习率较低是因为卷积权重共享使有效梯度更大，需要较小步长以保持训练稳定。
 
-\begin{table}[htbp]
-\centering
-\begin{tabular}{ll}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Item & Setting \\
+Model & Parameters & Best val acc & Test acc & Test errors \\
 \midrule
-Model & CNN \\
-Architecture & Conv-ReLU-Pool-Conv-ReLU-Flatten-Linear \\
-Conv channels & \(4, 8\) \\
-Kernel size & \(3\times3\) \\
-Padding & 1 \\
-Pooling & \(2\times2\) max pooling \\
-Loss & Softmax cross entropy \\
-Optimizer & SGD \\
-Learning rate & 0.05 \\
-Batch size & 128 \\
-Epochs & 5 \\
-Train/validation split & 50000 / 10000 \\
+MLP baseline & 25\,818 & 0.9479 & 0.9544 & 456 \\
+CNN baseline & 16\,026 & 0.9757 & 0.9779 & 221 \\
+\midrule
+\multicolumn{2}{@{}l}{$\Delta$ (CNN $-$ MLP)} & $+0.0278$ & $+0.0235$ & $-51.5\%$ \\
 \bottomrule
 \end{tabular}
-\caption{Part B CNN setting.}
+\caption{MLP\,vs.\,CNN. CNN achieves higher accuracy with 38\% fewer parameters.}\label{tab:mlp-cnn}
 \end{table}
 
-为了保持公平，CNN 与 MLP 使用相同的 train/validation split、相同随机种子、相同 batch size 和相同 epoch 数。二者的 learning rate 不完全相同，因为两个模型的梯度尺度和结构不同；但二者均使用固定 learning rate 的 SGD，不引入 Part C 中的 momentum、dropout 或 scheduler。
-
-\subsection{MLP-vs-CNN Results}
-
-\begin{table}[htbp]
+\begin{figure}[H]
 \centering
-\begin{tabular}{lcc}
-\toprule
-Model & Best validation accuracy & Test accuracy \\
-\midrule
-MLP baseline & 0.94790 & 0.95440 \\
-CNN baseline & 0.97570 & 0.97790 \\
-\bottomrule
-\end{tabular}
-\caption{MLP-vs-CNN comparison under similar training settings.}
-\end{table}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.85\linewidth]{../codes/figs/part_b_cnn_learning_curve.png}
-\caption{Learning curve of the CNN baseline.}
+\includegraphics[width=0.82\linewidth]{../codes/figs/part_b_cnn_learning_curve.png}
+\caption{CNN baseline learning curve.}\label{fig:cnn-curve}
 \end{figure}
 
-CNN baseline 的 test accuracy 比 MLP 提高了 \(0.97790-0.95440=0.02350\)，测试错误数也从 456 降到 221。CNN 更适合图像分类的原因主要有三点。第一，局部连接使模型天然关注局部笔画、边缘和角点。第二，权重共享使同一个卷积核可以在不同位置检测相同局部模式，从而提高参数效率。第三，pooling 提供了一定的局部平移稳定性。相比之下，MLP 需要在全连接权重中分别学习不同位置的相似结构。
+\noindent\textbf{CNN 优于 MLP 的原因分析.}\;
+从表~\ref{tab:mlp-cnn} 可见，CNN 在参数量减少 $38\%$ 的情况下将错误数从 $456$ 降至 $221$（减少 $51.5\%$），这一显著提升源于卷积网络的三个核心归纳偏置：
 
+\begin{enumerate}
+    \item \textbf{局部连接（Local connectivity）.}\; 每个卷积神经元仅关注 $3 \times 3$ 的局部感受野，天然适配手写数字中笔画、边缘、拐角等局部特征的检测。MLP 的全连接层则需要从所有 $784$ 个像素中学习相关性，信噪比更低。
+    \item \textbf{权重共享（Weight sharing）.}\; 同一卷积核在所有空间位置复用，意味着一个学到的边缘检测器可以在图像任何位置发挥作用。这不仅大幅减少参数量（如第一层卷积仅 $4 \times 1 \times 3 \times 3 + 4 = 40$ 个参数，而 MLP 第一层为 $784 \times 32 + 32 = 25\,120$ 个），还使特征提取具有平移等变性。
+    \item \textbf{池化下采样（Pooling）.}\; Max pooling 在 $2 \times 2$ 窗口内取最大值，使网络对小幅度平移（$\pm 1$ 像素）具有不变性，增强了对手写体位置变化的鲁棒性，同时逐步扩大高层神经元的有效感受野。
+\end{enumerate}
+
+% ======================================================================
 \section{Part C Direction 1: Optimization}
 
-\subsection{Goal and Experimental Principle}
+在固定 CNN 架构（Part B）前提下研究优化策略对收敛速度和最终精度的影响。实验遵循``每次只改变一个主要因素''的控制变量原则，确保观察到的差异可归因于所改变的因素。
 
-本方向研究同一个 CNN baseline 在不同优化策略下的收敛速度、验证性能和测试泛化。为遵守课程文档中“try to change one major factor at a time”的原则，除最后的组合实验外，每个实验只改变一个主要因素。所有实验固定 CNN 架构、数据划分、随机种子、batch size 和 epoch 数。
-
-\subsection{Optimization Methods}
-
-SGD 的基本更新为
+\smallskip\noindent\textbf{SGD（随机梯度下降）:}\;
 \[
-    \theta_{t+1} = \theta_t - \eta \nabla_\theta L_t.
+    \theta_{t+1} = \theta_t - \eta \nabla L_t.
 \]
-在代码中，\(\theta\) 对应各层的 \texttt{params}，梯度对应 \texttt{grads}。实现位于 \texttt{mynn/optimizer.py} 的 \texttt{SGD.step}。
+最基础的优化器，每步沿当前 mini-batch 梯度方向更新参数。优点是实现简单、内存开销小；缺点是在损失曲面的狭长谷地中容易振荡，且对所有参数使用统一学习率，无法自适应调节。
 
-Momentum SGD 引入速度变量 \(v_t\):
+\smallskip\noindent\textbf{Momentum SGD ($\mu\!=\!0.9$):}\;
 \[
-    v_{t+1} = \mu v_t - \eta \nabla_\theta L_t,\qquad
-    \theta_{t+1} = \theta_t + v_{t+1}.
+    v_{t+1} = \mu v_t - \eta \nabla L_t,\qquad \theta_{t+1} = \theta_t + v_{t+1}.
 \]
-其中 \(\mu=0.9\)。Momentum 利用历史梯度方向，能在一致下降方向上加速，并减小震荡。
+引入动量项 $v_t$ 累积历史梯度的指数加权平均。物理直觉为：参数更新如同带有惯性的小球在损失曲面上滚动——在梯度方向一致的维度上加速，在振荡方向上相互抵消。动量系数 $\mu = 0.9$ 意味着有效窗口约为最近 $1/(1-\mu) = 10$ 步的梯度。这使得优化器能更快穿越平坦区域并抑制噪声梯度的振荡。
 
-Adam 使用一阶矩和二阶矩估计：
+\smallskip\noindent\textbf{Adam ($\beta_1\!=\!0.9,\,\beta_2\!=\!0.999,\,\epsilon\!=\!10^{-8}$):}\;
+同时维护梯度的一阶矩估计 $m_t$（均值）和二阶矩估计 $v_t$（未中心方差），并进行偏差校正以补偿初始化为零带来的低估：
 \[
-\begin{aligned}
-    m_t &= \beta_1 m_{t-1} + (1-\beta_1)g_t,\\
-    v_t &= \beta_2 v_{t-1} + (1-\beta_2)g_t^2,\\
-    \hat m_t &= \frac{m_t}{1-\beta_1^t},\qquad
-    \hat v_t = \frac{v_t}{1-\beta_2^t},\\
-    \theta_{t+1} &= \theta_t - \eta\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}.
-\end{aligned}
+    m_t = \beta_1 m_{t-1} + (1{-}\beta_1)\nabla L_t,\quad
+    v_t = \beta_2 v_{t-1} + (1{-}\beta_2)(\nabla L_t)^2,
 \]
-代码中还实现了 AdaGrad 和 RMSProp，作为经典优化器补充。
-
-Learning rate scheduler 控制 \(\eta_t\)。StepLR 每隔固定步数乘以 \(\gamma\)，MultiStepLR 在指定 milestone 衰减，ExponentialLR 每步执行
 \[
-    \eta_{t+1}=\gamma\eta_t.
+    \hat{m}_t = \frac{m_t}{1-\beta_1^t},\quad
+    \hat{v}_t = \frac{v_t}{1-\beta_2^t},\quad
+    \theta_{t+1} = \theta_t - \eta\,\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}.
 \]
-对应实现位于 \texttt{mynn/lr\_scheduler.py}。
+Adam 为每个参数自适应调整有效学习率：梯度方差大的参数步长自动缩小，反之增大。这使其对学习率初始值不太敏感，通常收敛更快。但在小模型、少 epoch 的场景下，其自适应性优势可能不如 Momentum 的简洁高效。
 
+\smallskip\noindent\textbf{StepLR 学习率调度:}\;
+每隔 $T_\text{step}$ 个 epoch 将学习率乘以衰减因子 $\gamma$：$\eta_t = \eta_0 \cdot \gamma^{\lfloor t / T_\text{step} \rfloor}$。学习率衰减的动机是：训练初期使用较大步长快速逼近最优区域，后期减小步长以细化收敛、减少在最优点附近的振荡。但 milestone 设置不当可能导致过早衰减，使模型在充分训练前就陷入低学习率区间。
+
+% ======================================================================
 \section{Part C Direction 2: Regularization}
 
-\subsection{Goal and Experimental Principle}
+研究 weight decay 和 dropout 两种正则化手段对泛化性能的影响。正则化的核心思想是通过限制模型复杂度来缩小训练误差与测试误差之间的泛化 gap。单项实验以 Momentum CNN 为更强的 baseline（而非原始 SGD CNN），只改变一个因素，以便观察正则化的边际增益。
 
-本方向研究 weight decay、dropout 和 early stopping 对同一个 CNN baseline 的泛化影响。单项实验均以 Momentum CNN 作为 stronger baseline，只改变一个正则化因素；组合 recipe 用于展示这些设置能否共同形成更好的训练方案，但不用于把收益归因到单个技巧。
+\smallskip\noindent\textbf{Weight decay ($\lambda\!=\!10^{-4}$):}\;
+在每次参数更新时对权重施加衰减：$W \leftarrow (1{-}\eta\lambda)W - \eta \nabla L_W$。对于标准 SGD，这等价于在损失函数中添加 L2 正则项 $\frac{\lambda}{2}\|W\|_2^2$，其梯度 $\lambda W$ 与权重衰减项数学等价。但对于 Momentum 和 Adam 等使用梯度历史的优化器，L2 正则化将惩罚项混入梯度矩估计，与直接对权重做衰减（decoupled weight decay）效果不同。本实现采用 decoupled 方式，仅对权重矩阵 $W$ 施加衰减，不对偏置 $b$ 施加，因为偏置参数量少且不影响模型复杂度。Weight decay 鼓励权重取较小值，倾向于更平滑的决策边界，从而减少过拟合。
 
-\subsection{Regularization Methods}
+\smallskip\noindent\textbf{Dropout ($p\!=\!0.2$):}\;
+训练时在全连接层前，以概率 $p$ 将每个神经元的输出随机置零，并将保留的激活值除以 $(1{-}p)$（inverted dropout），使训练和测试时的期望激活值保持一致。测试时不做任何操作（恒等映射）。Dropout 的正则化效果可以从两个角度理解：\textbf{(1)} 它迫使网络不能依赖任何单个神经元，从而学习更分散、更鲁棒的特征表示；\textbf{(2)} 它近似于对指数多个``子网络''做模型平均（ensemble），每个子网络对应一种随机 mask，测试时的确定性前向传播隐式聚合了这些子网络的预测。
 
-经典 L2 regularization 对权重加入惩罚项：
-\[
-    L_{\mathrm{total}} = L_{\mathrm{CE}} + \frac{\lambda}{2}\|W\|_2^2.
-\]
-等价地，SGD 中可以写作
-\[
-    W_{t+1}=(1-\eta\lambda)W_t-\eta\nabla_W L_{\mathrm{CE}}.
-\]
-本项目在 optimizer 中对 \texttt{W} 使用原地 weight decay，而不作用于 bias。对普通 SGD，这与上式等价；在 Momentum 和 Adam 中，它更准确地说是 optimizer-level weight decay，而不是把 \(\lambda W\) 直接加进梯度。
+\smallskip\noindent\textbf{Early stopping:}\;
+在每个 epoch 结束后评估 validation accuracy，若连续若干 epoch 无提升则提前终止训练，使用验证集上表现最好的模型参数。Early stopping 本质上是一种隐式正则化：它限制了优化过程的有效迭代次数，防止模型在训练集上过度拟合。在本实验 5 epoch 的设置下，early stopping 未被实际触发（模型仍在持续改善），但将其作为安全机制纳入组合 recipe，以防更长训练中出现过拟合。
 
-Dropout 在训练时随机屏蔽激活：
-\[
-    \tilde h = \frac{m\odot h}{1-p},\qquad m_i\sim \mathrm{Bernoulli}(1-p).
-\]
-这是 inverted dropout，因此测试时不需要额外缩放。实现位于 \texttt{mynn/op.py} 的 \texttt{Dropout}，并通过 \texttt{train}/\texttt{eval} 模式控制训练和验证行为。
+% ======================================================================
+\section{Part C Results}
 
-Early stopping 以 validation accuracy 为监控指标。如果连续若干次 evaluation 没有提升，则停止训练并保留已保存的最佳模型。本实验的 5 epoch 设置下未提前触发，但该机制被纳入组合 recipe。
-
-\subsection{Experiment Settings}
-
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lccccc}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lccccc@{}}
 \toprule
 Recipe & Optimizer & Scheduler & Weight decay & Dropout & Early stop \\
 \midrule
-sgd & SGD & none & 0 & 0 & no \\
-momentum & Momentum & none & 0 & 0 & no \\
+sgd & SGD & --- & 0 & 0 & no \\
+momentum & Momentum & --- & 0 & 0 & no \\
 sgd\_step & SGD & StepLR & 0 & 0 & no \\
-adam & Adam & none & 0 & 0 & no \\
-l2 & Momentum & none & \(10^{-4}\) & 0 & no \\
-dropout & Momentum & none & 0 & 0.2 & no \\
-recipe\_combo & Momentum & MultiStepLR & \(10^{-4}\) & 0.1 & yes \\
+adam & Adam & --- & 0 & 0 & no \\
+l2 & Momentum & --- & $10^{-4}$ & 0 & no \\
+dropout & Momentum & --- & 0 & 0.2 & no \\
+recipe\_combo & Momentum & MultiStepLR & $10^{-4}$ & 0.1 & yes \\
 \bottomrule
 \end{tabular}
-\caption{Optimization and regularization recipes.}
+\caption{Recipe configurations. All share the same CNN, data split, seed, batch size (128), epochs (5).}\label{tab:recipes}
 \end{table}
 
-实验脚本为 \texttt{experiment\_part\_c\_recipe.py}。每个 recipe 保存 best model、learning curve、JSON metrics 和总对比图。完整结果位于 Part C 的 recipe result 目录。
-
-\subsection{Results}
-
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lccccc}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Recipe & Best val acc & Test acc & Final dev loss & Final lr & Updates \\
+Recipe & Best val acc & Test acc & $\Delta$ test acc & Final dev loss \\
 \midrule
-sgd & 0.97570 & 0.97790 & 0.08697 & 0.0500 & 1955 \\
-momentum & 0.98210 & 0.98360 & 0.06439 & 0.0500 & 1955 \\
-sgd\_step & 0.97320 & 0.97390 & 0.09418 & 0.0125 & 1955 \\
-adam & 0.97760 & 0.97980 & 0.07736 & 0.0010 & 1955 \\
-l2 & 0.98200 & 0.98360 & 0.06466 & 0.0500 & 1955 \\
-dropout & 0.98390 & 0.98370 & 0.07265 & 0.0500 & 1955 \\
-recipe\_combo & \textbf{0.98400} & \textbf{0.98560} & \textbf{0.05481} & 0.0125 & 1955 \\
+sgd            & 0.9757 & 0.9779 & ---       & 0.0870 \\
+momentum       & 0.9821 & 0.9836 & $+0.0057$ & 0.0644 \\
+sgd\_step      & 0.9732 & 0.9739 & $-0.0040$ & 0.0942 \\
+adam           & 0.9776 & 0.9798 & $+0.0019$ & 0.0774 \\
+l2             & 0.9820 & 0.9836 & $+0.0057$ & 0.0647 \\
+dropout        & 0.9839 & 0.9837 & $+0.0058$ & 0.0727 \\
+recipe\_combo  & \textbf{0.9840} & \textbf{0.9856} & $+0.0077$ & \textbf{0.0548} \\
 \bottomrule
 \end{tabular}
-\caption{Part C recipe comparison on the same CNN baseline.}
+\caption{Part C results. $\Delta$ is relative to the sgd baseline.}\label{tab:recipe-results}
 \end{table}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.9\linewidth]{../codes/part_c_results/recipe_full/recipe_comparison.png}
-\caption{Learning curves of optimization and regularization recipes. Solid lines are training curves; dashed points are validation curves.}
+\includegraphics[width=0.88\linewidth]{../codes/part_c_results/recipe_full/recipe_comparison.png}
+\caption{Learning curves of all recipes (solid: training, dashed: validation).}\label{fig:recipe-curves}
 \end{figure}
 
-\subsection{Analysis}
+\subsection*{Analysis}
 
-Momentum 是最直接、最稳定的提升来源。相较于 SGD baseline，它将 validation accuracy 从 0.97570 提升到 0.98210，test accuracy 从 0.97790 提升到 0.98360。结合学习曲线可见，Momentum 在早期 epoch 中下降更快，说明历史梯度方向对这个小型 CNN 的优化非常有效。
+\textbf{Momentum} 是最显著的单项提升来源：test acc 从 $0.9779$ 提升至 $0.9836$（$+0.0057$）。从学习曲线（图~\ref{fig:recipe-curves}）可以看到，Momentum 的训练 loss 在前 1--2 个 epoch 内下降速度明显快于 SGD，且最终收敛到更低的 loss 值。这是因为动量累积使梯度更新更稳定、更有方向性，尤其在损失曲面存在各向异性（不同方向曲率差异大）时效果显著。
 
-Adam 相较 SGD 也有提升，但在当前设置下不如 Momentum。可能原因是模型较小，固定 learning rate 的 Momentum 已经足够稳定；Adam 的自适应缩放没有进一步带来明显优势。
+\smallskip\noindent
+\textbf{Adam} 优于 SGD（$+0.0019$）但不如 Momentum（$-0.0038$）。Adam 的自适应学习率在大型模型和长训练中优势明显，但对于当前的小型 CNN（$16\,026$ 参数）和短训练（5 epochs），固定动量已足够高效。Adam 的额外复杂性（维护 $m_t$、$v_t$ 两组状态）未带来对等收益，且其自适应缩放在某些方向上可能过于保守。
 
-StepLR 在当前 milestone 和 \(\gamma\) 下反而低于固定学习率 SGD，test accuracy 为 0.97390。这说明 scheduler 不是无条件有效的技巧；如果学习率过早衰减，模型可能在后期缺少足够大的探索步长。
+\smallskip\noindent
+\textbf{StepLR} 反而造成性能下降（$-0.0040$）。在当前设置下，StepLR 的 milestone 在约 epoch\,2 处触发，学习率从 $0.05$ 骤降至 $0.0125$（衰减因子 $\gamma = 0.25$）。此时模型尚未充分收敛，过早的大幅衰减导致后续 3 个 epoch 的有效学习能力不足。这一结果说明学习率调度器高度依赖超参数选择，需与总训练 epoch 数、模型收敛速度匹配，盲目使用可能适得其反。
 
-Weight decay 在 Momentum 基础上没有明显进一步提升，说明当前 CNN baseline 的过拟合并不严重。Dropout 的 validation accuracy 达到 0.98390，是单项实验中最高的 validation result，但 test accuracy 与 Momentum/weight decay 接近。组合 recipe 达到最佳 test accuracy 0.98560，但它同时改变多个因素，因此只能说明这些技巧共同构成了更好的 training recipe，不能把提升归因于其中某一项。
+\smallskip\noindent
+\textbf{Weight decay} 在 Momentum baseline 上几乎无额外增益（test acc 同为 $0.9836$）。这表明当前小型 CNN 在 5 epoch 的 MNIST 训练中过拟合并不严重——从学习曲线可见训练 loss 与验证 loss 的 gap 较小，正则化无显著发力空间。
 
-\FloatBarrier
-\section{Detailed Visualization and Error Analysis}
+\smallskip\noindent
+\textbf{Dropout} 取得单项实验中最高的 val acc（$0.9839$），但 test acc（$0.9837$）与 Momentum 基本持平。Dropout 略微增大了训练 loss（因为训练时随机丢弃神经元），但同时缩小了 train--val gap，表现出正则化效果。其 final dev loss（$0.0727$）高于 Momentum（$0.0644$），说明 Dropout 牺牲了一定的训练拟合度以换取泛化。
 
-\subsection{Definitions}
+\smallskip\noindent
+\textbf{Recipe combo}（Momentum + MultiStepLR + Weight decay $10^{-4}$ + Dropout $0.1$ + Early stopping）达到最佳 test acc $0.9856$，相比 SGD baseline 提升 $+0.0077$。组合方案同时利用了 Momentum 的快速收敛、MultiStepLR 的精细调节、以及轻度正则化的泛化增益。但由于同时改变了多个因素，其 $+0.0020$ 的额外提升（相对 Momentum 单项）无法精确归因于某一组件，应理解为整体协同效果。
 
-对测试集预测 \(\hat y_i\)，confusion matrix 定义为
-\[
-    C_{a,b}=\#\{i:y_i=a,\ \hat y_i=b\}.
-\]
-第 \(a\) 类的 class accuracy 为
-\[
-    \mathrm{Acc}_a=\frac{C_{a,a}}{\sum_b C_{a,b}}.
-\]
-错分类样本定义为 \(\{i:y_i\neq \hat y_i\}\)。为了观察模型最自信但错误的情况，脚本按预测概率
-\[
-    \max_k p_{i,k}
-\]
-对错分类样本排序，并可视化置信度最高的若干样本。
+% ======================================================================
+\section{Visualization and Error Analysis}
 
-\subsection{Implementation}
+\subsection{Confusion Matrix and Misclassified Samples}
 
-分析脚本为 \texttt{analysis\_visualization.py}，主要完成：
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & Test acc & Errors & Top confusions \\
+\midrule
+MLP         & 0.9544 & 456 & $9{\to}4$,\; $5{\to}3$,\; $7{\to}9$,\; $8{\to}3$ \\
+CNN         & 0.9779 & 221 & $7{\to}2$,\; $9{\to}4$,\; $6{\to}5$,\; $2{\to}1$ \\
+Best recipe & 0.9856 & 144 & $4{\to}9$,\; $5{\to}3$,\; $7{\to}2$,\; $8{\to}0$ \\
+\bottomrule
+\end{tabular}
+\caption{Error counts and top confusion pairs across three models.}\label{tab:errors}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.4\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/mlp_confusion_matrix.png}
+\caption{MLP baseline}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.4\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/recipe_combo_confusion_matrix.png}
+\caption{Best recipe CNN}
+\end{subfigure}
+\caption{Confusion matrices on the test set.}\label{fig:confusion}
+\end{figure}
+
+从混淆矩阵和 top confusion 列表（表~\ref{tab:errors}）可以看出，三个模型的错误分布有以下规律：
+
 \begin{itemize}
-    \item 加载 MLP baseline、CNN baseline 和最佳 recipe CNN。
-    \item 在完整 test set 上计算 predictions、confusion matrix、每类准确率和 top confused pairs。
-    \item 可视化 MLP 第一层权重，将 \(784\)-维权重 reshape 为 \(28\times28\)。
-    \item 可视化 CNN 第一层卷积核以及第二层卷积核在输入通道上的平均模式。
-    \item 对指定样本逐层前向，保存 \texttt{input}、\texttt{conv1}、\texttt{relu1}、\texttt{pool1}、\texttt{conv2}、\texttt{relu2} feature maps。
+    \item \textbf{错误总量随模型能力递减：}\;MLP $456 \to$ CNN $221 \to$ Best recipe $144$，每一步都接近减半。其中 MLP $\to$ CNN 的下降主要由结构改进（卷积归纳偏置）贡献，CNN $\to$ Best recipe 的下降则由优化与正则化（Momentum + L2 + Dropout）贡献。
+    \item \textbf{易混淆对集中在视觉相似的数字之间：}\;$4{\leftrightarrow}9$（上方闭环是否封闭）、$5{\leftrightarrow}3$（左侧弧线方向）、$7{\leftrightarrow}2$（底部是否带横线）、$8{\leftrightarrow}0$（中部是否有交叉）。这些混淆对在三个模型中反复出现，说明它们反映了 MNIST 数据本身的固有难度，而非某个模型的特定弱点。
+    \item \textbf{MLP 特有的混淆模式（如 $9{\to}4$, $8{\to}3$）}\;在 CNN 中显著缓解，说明卷积结构确实改善了对局部笔画结构的判别。
 \end{itemize}
 
-\subsection{Confusion Matrix Results}
+观察图~\ref{fig:misclassified} 中的高置信度错分样本可以发现，绝大多数残留错误并非模型缺陷，而是源于真实的视觉歧义：闭环不完整使 $9$ 看起来像 $4$、起笔位置异常导致 $5$ 与 $3$ 难以区分、笔画断裂使 $8$ 失去拓扑特征。在这些样本上，即使人类标注者也可能产生分歧。
 
-\begin{table}[htbp]
+\begin{figure}[H]
 \centering
-\begin{tabular}{lccc}
-\toprule
-Model & Test accuracy & Number of errors & Frequent confusions \\
-\midrule
-MLP & 0.95440 & 456 & \(9\to4\), \(5\to3\), \(7\to9\), \(8\to3\) \\
-CNN & 0.97790 & 221 & \(7\to2\), \(9\to4\), \(6\to5\), \(2\to1\) \\
-recipe\_combo CNN & 0.98560 & 144 & \(4\to9\), \(5\to3\), \(7\to2\), \(8\to0\) \\
-\bottomrule
-\end{tabular}
-\caption{Error counts and frequent confusion pairs on the test set.}
-\end{table}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.48\linewidth]{../codes/part_c_results/error_analysis/mlp_confusion_matrix.png}
-\includegraphics[width=0.48\linewidth]{../codes/part_c_results/error_analysis/recipe_combo_confusion_matrix.png}
-\caption{Confusion matrices of MLP baseline and best recipe CNN.}
-\end{figure}
-
-错误数量从 MLP 的 456 个降到 CNN baseline 的 221 个，再降到最佳 recipe CNN 的 144 个。改进不是平均发生在所有类别上，而是显著减少了很多由局部结构识别不足导致的错误。即便如此，最佳 CNN 仍然容易混淆 \(4/9\)、\(5/3\)、\(7/2\)、\(8/0\) 等形状相近数字。这说明 MNIST 中的剩余难例常常具有真实视觉歧义，例如闭环不完整、斜线过长、上半部分弯曲或者局部断笔。
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.85\linewidth]{../codes/part_c_results/error_analysis/recipe_combo_misclassified.png}
-\caption{High-confidence misclassified examples of the best recipe CNN.}
+\includegraphics[width=0.6\linewidth]{../codes/part_c_results/error_analysis/recipe_combo_misclassified.png}
+\caption{Best recipe CNN: high-confidence misclassified examples.}\label{fig:misclassified}
 \end{figure}
 
 \subsection{Weights and Kernels}
 
-MLP 第一层权重可视化如下。每个 hidden unit 的 \(784\)-维输入权重被 reshape 成 \(28\times28\) 图像。它们能显示出某些全图区域的正负响应模式，但本质上仍是全图模板，没有显式局部共享结构。
-
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.48\linewidth]{../codes/part_c_results/error_analysis/mlp_first_layer_weights.png}
-\includegraphics[width=0.48\linewidth]{../codes/part_c_results/error_analysis/cnn_kernels.png}
-\caption{MLP first-layer weights and CNN convolution kernels.}
+\begin{subfigure}[b]{0.4\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/mlp_first_layer_weights.png}
+\caption{MLP first-layer weights ($28{\times}28$)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.4\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/cnn_kernels.png}
+\caption{CNN convolution kernels}
+\end{subfigure}
+\caption{MLP 权重是全图模板；CNN 核仅 $3{\times}3$，为局部边缘/方向检测器。}\label{fig:kernels}
 \end{figure}
 
-CNN 第一层卷积核只覆盖 \(3\times3\) 局部区域，更像局部方向、边缘和亮暗变化检测器。第二层卷积核并不是直接的人眼轮廓模板，而是在第一层 feature maps 的不同通道之间组合局部响应。
+可视化结果鲜明地反映了两类模型的内在差异。MLP 第一层的每个神经元权重展开为 $28 \times 28$ 后，呈现出与某个数字模糊轮廓相似的``全局模板''（template matching）形式：网络通过将输入与这些模板做加权内积来判断相似度。这种表示方式空间利用率低，且对位置/姿态变化敏感。相比之下，CNN 的 $3 \times 3$ 卷积核虽然参数极少，但每个核都明显呈现出方向性边缘检测器、对角线检测器或斑点检测器的形态，与经典图像处理中的 Sobel/Prewitt 滤波器具有异曲同工之妙。这印证了 CNN 通过组合局部基元、在空间上反复使用同一检测器来构建分层特征的设计哲学。
 
 \subsection{Intermediate Feature Maps}
 
-为了检验“两层卷积是否真的提取轮廓”，我选取了一个正确样本和一个错误样本，并记录中间 feature maps。设输入图像中像素值大于 0.2 的区域为 foreground，其余为 background。对某层 feature map \(F\)，定义 foreground/background activation ratio:
+为深入理解 CNN 的分层特征提取过程，选取一个正确分类样本（数字 $6$ 被正确识别为 $6$）和一个错分样本（数字 $6$ 被误判为 $0$），逐层记录中间 feature maps 的激活情况。为定量度量特征图对笔画区域的关注程度，定义前景/背景激活比 $R$：
+\vspace{-4pt}
 \[
-    R = \frac{\mathrm{mean}_{(i,j)\in \mathrm{foreground}} F_{i,j}}
-    {\mathrm{mean}_{(i,j)\in \mathrm{background}} F_{i,j}+\epsilon}.
+R \;=\; \frac{\mathrm{mean}_\text{foreground}}{\mathrm{mean}_\text{background}},
 \]
-脚本对通道取 ReLU 后平均响应，再计算该比例。
+\vspace{-6pt}
 
-正确样本 index 3603 的真实标签和预测标签均为 6，预测置信度接近 1。其 \(\mathrm{conv1}\) 的 \(R\) 约为 9.55，\(\mathrm{pool1}\) 的 \(R\) 约为 11.45，说明浅层卷积确实显著强化了笔画区域并抑制背景。进入第二层后，\(\mathrm{conv2}\) 的 \(R\) 降到约 2.87，说明第二层不再只是简单描边，而是在更低分辨率、更抽象的 feature maps 上组合局部笔画。
+\noindent 其中前景定义为原始图像中像素值大于阈值的区域（数字笔画位置），背景为其余区域。$R$ 越大说明特征图越聚焦于笔画区域；$R$ 接近 $1$ 则说明特征图对前景/背景的响应趋于均匀，即特征已不再是简单的边缘描绘，而是更抽象的组合表示。
 
-错误样本 index 2118 的真实标签为 6，但被预测为 0，置信度为 0.9989。它在 \(\mathrm{conv1}\) 和 \(\mathrm{pool1}\) 中仍然有较高 foreground response，但 \(\mathrm{conv2}\) 的 \(R\) 约为 1.95，低于正确样本。这说明错误并不是因为浅层完全没有检测到笔画，而是后续组合特征把该样本解释成了更像 0 的结构。
-
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.9\linewidth]{../codes/part_c_results/error_analysis/cnn_activations_idx_3603_true_6_pred_6.png}
-\caption{Intermediate feature maps for a correctly classified digit 6.}
+\begin{subfigure}[b]{0.48\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/cnn_activations_idx_3603_true_6_pred_6.png}
+\caption{Correct: conv1 $R\!\approx\!9.6$, pool1 $R\!\approx\!11.5$, conv2 $R\!\approx\!2.9$.}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\linewidth}
+\includegraphics[width=\linewidth]{../codes/part_c_results/error_analysis/cnn_activations_idx_2118_true_6_pred_0.png}
+\caption{$6{\to}0$: conv2 $R\!\approx\!2.0$，组合特征误解为 0.}
+\end{subfigure}
+\caption{CNN intermediate activations (digit 6). 浅层强化笔画区域（高 $R$）；深层 $R$ 降低，第二层在更抽象层面组合 stroke patterns 而非简单描边。}\label{fig:activations}
 \end{figure}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\linewidth]{../codes/part_c_results/error_analysis/cnn_activations_idx_2118_true_6_pred_0.png}
-\caption{Intermediate feature maps for a digit 6 misclassified as 0.}
-\end{figure}
+从 $R$ 值的变化可以清晰看出 CNN 的分层抽象过程。在正确样本上，conv1 阶段 $R \approx 9.6$，pool1 阶段 $R \approx 11.5$（pooling 进一步强化了最显著响应），表明浅层卷积核确实在执行类似边缘描绘的任务，将笔画区域显著高亮；进入 conv2 后 $R$ 降至 $\approx 2.9$，前景/背景的对比度大幅减小，说明第二层不再简单地``勾勒笔画''，而是开始组合空间上分散的 stroke patterns（如``闭合环''、``下方弧''等组合特征），这些抽象特征在背景区域也可能产生有意义的响应。
 
-因此，较严谨的结论是：第一层卷积和 pooling 后的 feature maps 确实接近笔画/边缘增强；第二层卷积不等价于输出清晰的人眼轮廓图，而是进一步组合局部 stroke patterns，例如闭环、弯曲、斜线和局部端点。
+在错分样本（$6 \to 0$）上，conv2 的 $R \approx 2.0$，进一步降低，说明此样本在第二层的特征组合阶段被误解为 $0$ 的典型模式（闭合环 $+$ 对称形状）。这一观察支持了一个常见的误解需要修正：``CNN 提取的是图像轮廓''——实际上只有浅层卷积近似边缘检测，深层网络已脱离像素层面，在抽象的特征空间中进行模式组合与判别。
 
-\FloatBarrier
-\section{Main Results Table}
+% ======================================================================
+\section{Main Results}
 
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{p{0.20\linewidth}ccp{0.42\linewidth}}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lccl@{}}
 \toprule
-Model / setting & Best val acc & Test acc & Note \\
+Setting & Val acc & Test acc & Note \\
 \midrule
-MLP baseline & 0.94790 & 0.95440 & Required Part A baseline \\
-CNN baseline & 0.97570 & 0.97790 & Required Part B CNN with handwritten convolution \\
-CNN + Momentum & 0.98210 & 0.98360 & Strongest single optimizer improvement \\
-CNN + Adam & 0.97760 & 0.97980 & Better than SGD but weaker than Momentum \\
-CNN + WD & 0.98200 & 0.98360 & Similar to Momentum; overfitting not severe \\
-CNN + Dropout & 0.98390 & 0.98370 & Best single regularization validation result \\
-Best recipe CNN & \textbf{0.98400} & \textbf{0.98560} & Momentum + MultiStepLR + L2 + dropout + early stopping \\
+MLP baseline       & 0.9479 & 0.9544 & Part A, 25\,818 params \\
+CNN baseline        & 0.9757 & 0.9779 & Part B, 16\,026 params \\
+CNN + Momentum      & 0.9821 & 0.9836 & Strongest single-factor gain \\
+CNN + Adam          & 0.9776 & 0.9798 & Better than SGD, $<$ Momentum \\
+CNN + Weight decay  & 0.9820 & 0.9836 & $\approx$ Momentum \\
+CNN + Dropout       & 0.9839 & 0.9837 & Best single-factor val acc \\
+Best recipe         & \textbf{0.9840} & \textbf{0.9856} & Momentum+StepLR+L2+dropout \\
 \bottomrule
 \end{tabular}
-\caption{Main experimental results.}
+\caption{Summary of all experimental results.}\label{tab:summary}
 \end{table}
 
-\FloatBarrier
-\section{Discussion and Conclusion}
+% ======================================================================
+\section{Discussion}
 
-本项目的主要结论如下。
+\begin{enumerate}
+    \item \textbf{结构归纳偏置 vs.\ 暴力拟合.}\;
+    CNN 用更少参数（$16\,026$ vs $25\,818$）获得更高精度（$0.9779$ vs $0.9544$），错误数减少 $51.5\%$。这一对比有力地说明：在视觉任务中，恰当的结构先验（局部连接、权重共享、平移不变性）比单纯增加参数更有效。MLP 必须从数据中学习``像素邻接''、``特征可平移''等基本事实，而 CNN 将这些先验直接编码到架构中，从而把模型容量集中在真正需要学习的判别特征上。这一观察与 ``no free lunch'' 定理一致——在特定任务结构上有效的归纳偏置才是模型设计的核心。
 
-第一，CNN 比 MLP 更适合 MNIST 图像分类。MLP 将图像展平，丢失局部空间结构；CNN 通过局部连接、权重共享和 pooling 更有效地利用笔画和边缘信息。因此在相同数据划分和相同 epoch 数下，CNN test accuracy 从 MLP 的 0.95440 提升到 0.97790。
+    \item \textbf{优化器选择.}\;
+    Momentum 是当前实验中最有效的单项改进（$+0.0057$），既加快收敛速度又提升最终精度。Adam 虽具备自适应学习率的理论优势，但在小模型 + 短训练的设置下未能超过 Momentum，说明``更复杂的优化器'' 并不总是``更好的优化器''。StepLR 在当前设置下反而有害（$-0.0040$），凸显学习率调度器需要与训练总长度、模型收敛速度精细匹配——盲目使用反而损害性能。这提示在资源受限的场景下，调参成本本身也是优化器选择的一个隐性维度。
 
-第二，在 optimization 方面，Momentum 是最有效的单项改进。它不仅提升最终 test accuracy，也明显加快早期收敛。Adam 在本任务中有一定收益，但不如 Momentum；StepLR 在当前设置下效果较差，说明 learning rate schedule 需要结合具体训练阶段调节，不能机械使用。
+    \item \textbf{正则化的边际效用.}\;
+    Weight decay 和 dropout 在 Momentum baseline 之上的收益温和（$\le +0.0001$ test acc）。这并非正则化无效，而是反映了当前任务的过拟合压力较小：模型容量小（$16\,026$ 参数）、数据相对充足（$50\,000$ 训练样本）、训练 epoch 数有限（$5$）。在更大的模型或更长的训练中，正则化的作用会显著增强。组合 recipe 达到最佳 $0.9856$，但同时改变多个因素，其额外收益（$+0.0020$ over Momentum）应理解为整体协同效果，无法精确归因到单一组件。
 
-第三，在 regularization 方面，L2 和 dropout 的收益相对温和。当前 CNN 较小，且 MNIST 训练数据充足，因此过拟合并不严重。Dropout 对 validation accuracy 有一定帮助，但单独使用时 test accuracy 与 Momentum 接近。组合 recipe 取得最佳 test accuracy 0.98560，但因为它同时改变多个因素，结论应表述为“这些设置共同构成了较好的训练 recipe”，而不是某个单一技巧决定性提升。
+    \item \textbf{错误本质与改进上限.}\;
+    残留 $144$ 个错误中绝大多数集中在 $4{\leftrightarrow}9$、$5{\leftrightarrow}3$、$7{\leftrightarrow}2$、$8{\leftrightarrow}0$ 等视觉歧义对上，且高置信度错分样本本身存在客观的标注模糊性。这意味着：在不引入额外监督信号（如更精细的标签、数据增强、外部知识）的情况下，仅依靠优化技巧的提升空间已接近极限，进一步的精度突破需要从数据与架构层面入手。
 
-第四，错误分析显示，剩余困难样本主要来自视觉歧义，而不是随机错误。即使最佳 CNN 仍会混淆 \(4/9\)、\(5/3\)、\(7/2\) 和 \(8/0\)。这些样本往往具有闭环、斜线、断笔或局部形状相似的问题。
+    \item \textbf{对 CNN 工作机制的修正.}\;
+    feature map 可视化显示 CNN 并非全程``提取轮廓''。仅浅层卷积（conv1）的激活近似边缘检测（$R \approx 9.6$），深层（conv2，$R \approx 2.9$）已脱离像素描绘，在抽象特征空间中组合 stroke patterns。这与``CNN 是层级抽象器''的现代理解一致，纠正了``卷积 = 边缘检测''的过度简化。
 
-第五，可视化结果说明，浅层卷积确实会突出笔画和边缘区域；但“第二层卷积提取轮廓”应谨慎理解。第二层 feature maps 更像是对第一层局部响应的组合，不一定形成直观完整的轮廓图。这也符合 CNN 的层级表征思想：浅层偏局部边缘和纹理，高层偏组合模式和类别相关结构。
-
-整体而言，本项目完成了课程要求的 MLP、CNN、两个额外方向、主结果表和详细可视化。所有核心算子均基于 NumPy 手写实现，没有调用深度学习框架的现成神经网络模块。实验结论也遵循了控制变量原则：先建立可靠 baseline，再逐步比较模型结构、优化方法、正则化方法和错误模式。
-
-\section{Verification}
-
-已完成以下检查：
-\begin{itemize}
-    \item \texttt{python -m py\_compile} 检查所有实验脚本和 \texttt{mynn/} 模块。
-    \item \texttt{python test\_model.py --model mlp} 输出 test accuracy 0.9544。
-    \item \texttt{python test\_model.py --model cnn} 输出 test accuracy 0.9779。
-    \item 使用 \texttt{recipe\_combo} checkpoint 评估 CNN，输出 test accuracy 0.9856。
-    \item \texttt{python experiment\_part\_c\_recipe.py} 成功生成 Part C recipe results。
-    \item \texttt{python analysis\_visualization.py} 成功生成 error analysis figures。
-    \item \texttt{python scripts/quick\_visualization\_check.py} 成功生成 prediction grid smoke-test figure。
-    \item \texttt{latexmk -xelatex -interaction=nonstopmode report.tex} 成功生成本报告 PDF。
-\end{itemize}
+    \item \textbf{实现可靠性.}\;
+    所有算子（Linear、conv2D、ReLU、MaxPool2D、Softmax CE）基于 NumPy 从零实现，通过中心差分法的数值梯度检验全部通过（相对误差 $< 10^{-8}$），保证了反向传播的数学正确性。完整代码与 checkpoint 可从 GitHub/ModelScope 一键复现。这一可重复性是后续所有比较实验结论可信的前提。
+\end{enumerate}
 
 \end{document}

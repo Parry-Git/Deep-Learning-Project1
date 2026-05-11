@@ -87,9 +87,9 @@ class conv2D(Layer):
     
     def forward(self, X):
         """
-        input X: [batch, channels, H, W]
-        W : [1, out, in, k, k]
-        no padding
+        input X: [batch, in_channels, H, W]
+        output:  [batch, out_channels, H', W']
+        Supports stride and zero-padding.
         """
         assert X.ndim == 4
         assert X.shape[1] == self.in_channels
@@ -324,7 +324,11 @@ class MultiCrossEntropyLoss(Layer):
     
 class L2Regularization(Layer):
     """
-    L2 Reg can act as weight decay that can be implemented in class Linear.
+    L2 regularization is implemented as decoupled weight decay in the optimizer
+    (see optimizer.py). Each optimizer applies  W *= (1 - lr * lambda)  before
+    the gradient step, which is equivalent to adding lambda * W to the gradient
+    for vanilla SGD and corresponds to the AdamW formulation for Adam.
+    This class is intentionally left as a no-op placeholder.
     """
     pass
        

@@ -1,29 +1,84 @@
-### Start Up
+# MNIST Classification with NumPy-only MLP and CNN
 
-First look into the `dataset_explore.ipynb` and get familiar with the data.
+All core operators (linear layer, conv2D, softmax cross-entropy, max pooling, dropout)
+are implemented from scratch in NumPy without deep-learning frameworks.
 
-### Codes need your implementation
+## File Structure
 
-1. `op.py` 
-   Implement the forward and backward function of `class Linear`
-   Implement the `MultiCrossEntropyLoss`. Note that the `Softmax` layer could be included in the `MultiCrossEntropyLoss`.
-   Try to implement `conv2D`, do not worry about the efficiency.
-   You're welcome to implement other complicated layer (e.g.  ResNet Block or Bottleneck)
-2. `models.py` You may freely edit or write your own model structure.
-3. `mynn/lr_scheduler.py` You may implement different learning rate scheduler in it.
-4. `MomentGD` in `optimizer.py`
-5. Modifications in `runner.py` if needed when your model structure is slightly different from the given example.
+| File | Description |
+|---|---|
+| `mynn/op.py` | Core layers and loss functions |
+| `mynn/models.py` | `Model_MLP` and `Model_CNN` definitions |
+| `mynn/optimizer.py` | SGD, Momentum, AdaGrad, RMSProp, Adam |
+| `mynn/lr_scheduler.py` | StepLR, MultiStepLR, ExponentialLR |
+| `mynn/runner.py` | Training loop, evaluation, early stopping |
+| `test_train.py` | Part A / Part B training entry point |
+| `test_model.py` | Evaluate a saved model on the test set |
+| `experiment_part_c_recipe.py` | Part C optimization and regularization experiments |
+| `analysis_visualization.py` | Confusion matrix, misclassified examples, weight and kernel visualization |
 
+## Quick Start
 
-### Train the model.
+```bash
+# 1. Environment
+conda env create -f ../environment.yml
+conda activate dl-pj1
 
-Open test_train.py, modify parameters and run it.
+# 2. Place MNIST data
+#    Put the four gzip files under codes/dataset/MNIST/
 
-If you want to train the model on your own dataset, just change the values of variable *train_images_path* and *train_labels_path*
+# 3. Download trained checkpoints (optional, for evaluation only)
+python ../scripts/download_checkpoints.py
 
-### Test the model.
+# 4. Verify
+python ../scripts/verify_submission.py
 
-Open test_model.py, specify the saved model's path and the test dataset's path, then run the script, the script will output the accuracy on the test dataset.
+# 5. Train from scratch
+python test_train.py --model mlp
+python test_train.py --model cnn
 
+# 6. Evaluate
+python test_model.py --model mlp
+python test_model.py --model cnn
 
+# 7. Part C experiments
+python experiment_part_c_recipe.py \
+  --recipes sgd,momentum,sgd_step,adam,l2,dropout,recipe_combo \
+  --epochs 5 --eval-batch-size 1000 \
+  --out-dir part_c_results/recipe_full
 
+# 8. Error analysis and visualization
+python analysis_visualization.py
+```
+
+## Troubleshooting
+
+### `_pickle.UnpicklingError: invalid load key, 'v'.`
+
+Model checkpoints are stored with **Git LFS** on ModelScope. If `git-lfs` is not
+installed, `git clone` downloads only pointer files (~131 bytes) instead of the
+actual weights. Fix:
+
+```bash
+# macOS
+brew install git-lfs
+# Linux (Debian/Ubuntu)
+sudo apt install git-lfs
+
+git lfs install
+# then re-download checkpoints
+python ../scripts/download_checkpoints.py
+```
+
+### `ModuleNotFoundError: No module named 'numpy._core.numeric'`
+
+Checkpoints were serialized with **NumPy >= 2.0**, which uses the internal path
+`numpy._core`. If your environment has NumPy 1.x (`numpy.core`), pickle will
+fail. The evaluation scripts (`test_model.py`, `analysis_visualization.py`)
+include a compatibility shim, but the simplest fix is to use the provided
+environment:
+
+```bash
+conda env create -f ../environment.yml
+conda activate dl-pj1
+```

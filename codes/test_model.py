@@ -1,11 +1,17 @@
 # Evaluate a saved MLP or CNN model on the MNIST test set.
 import argparse
 import gzip
+import sys
 from pathlib import Path
 from struct import unpack
 
-import mynn as nn
 import numpy as np
+import numpy.core as _np_core
+import numpy.core.numeric as _np_core_numeric
+sys.modules.setdefault('numpy._core', _np_core)
+sys.modules.setdefault('numpy._core.numeric', _np_core_numeric)
+
+import mynn as nn
 
 
 BASE_DIR = Path(__file__).resolve().parent
